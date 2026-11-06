@@ -1,0 +1,9 @@
+name = "zyrox-cosmetics"
+main = "worker.js"
+compatibility_date = "2026-10-01"
+preview_urls = false
+
+[[d1_databases]]
+binding = "DB"
+database_name = "zyrox-cosmetics"
+database_id = "YOUR_DATABASE_ID"

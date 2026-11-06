@@ -1,0 +1,20 @@
+{
+	"schemaVersion": 1,
+	"id": "zyrox",
+	"version": "${version}",
+	"name": "Zyrox Client",
+	"description": "In-game client for the Zyrox launcher. Music support is based on Minecraft Spotify Lyrics by Alon Goldberger (MIT). Inter font by The Inter Project Authors (OFL).",
+	"authors": ["Sakulius"],
+	"license": "MIT",
+	"environment": "client",
+	"entrypoints": {
+		"client": ["de.sakulius.zyrox.ZyroxClient"]
+	},
+	"mixins": ["zyrox.mixins.json"],
+	"depends": {
+		"fabricloader": ">=0.20.1",
+		"minecraft": "~26.3",
+		"java": ">=25",
+		"fabric-api": "*"
+	}
+}

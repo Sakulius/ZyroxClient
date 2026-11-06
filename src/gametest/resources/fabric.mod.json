@@ -1,0 +1,10 @@
+{
+	"schemaVersion": 1,
+	"id": "zyrox-test",
+	"version": "1.0.0",
+	"name": "Zyrox Client Tests",
+	"environment": "client",
+	"entrypoints": {
+		"fabric-client-gametest": ["de.sakulius.zyrox.test.ZyroxClientTest"]
+	}
+}

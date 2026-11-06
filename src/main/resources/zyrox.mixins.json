@@ -1,0 +1,16 @@
+{
+	"required": true,
+	"package": "de.sakulius.zyrox.mixin",
+	"compatibilityLevel": "JAVA_25",
+	"client": [
+		"CameraMixin",
+		"HudMixin",
+		"LightmapMixin",
+		"LivingEntityRendererMixin",
+		"MouseHandlerMixin",
+		"TitleScreenMixin"
+	],
+	"injectors": {
+		"defaultRequire": 1
+	}
+}
