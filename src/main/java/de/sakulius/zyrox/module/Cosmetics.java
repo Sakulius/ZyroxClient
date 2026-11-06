@@ -1,28 +1,60 @@
 package de.sakulius.zyrox.module;
 
+import de.sakulius.zyrox.ZyroxClient;
 import de.sakulius.zyrox.cloud.CloudCosmetics;
 import de.sakulius.zyrox.screen.CameraRig;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import net.minecraft.client.Minecraft;
+import net.minecraft.core.ClientAsset;
 import net.minecraft.core.particles.ParticleOptions;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.resources.Identifier;
+import net.minecraft.world.entity.player.PlayerSkin;
 
 public final class Cosmetics {
+	public record Cape(String id, String name, ClientAsset.Texture texture) {
+	}
+
+	private record CachedSkin(PlayerSkin source, String cape, PlayerSkin skin) {
+	}
+
 	public record Aura(String name, ParticleOptions particle, int interval, Identifier icon, int iconSize) {
 	}
 
 	public record Wearable(String id, String name) {
 	}
 
+	public static final String DEFAULT_CAPE = "default";
 	public static final String NOTHING = "none";
+	public static final String CAPE_SLOT = "cape";
 	public static final String HAT_SLOT = "hat";
 	private static final double AURA_RADIUS = 0.7;
 	private static final double AURA_SPIN = 0.35;
 	private static final double AURA_RISE = 0.02;
+
+	public static final List<Cape> CAPES = List.of(
+		new Cape(DEFAULT_CAPE, "Your own", null),
+		cape("Zyrox", "zyrox"),
+		cape("Nebula", "nebula"),
+		cape("Inferno", "inferno"),
+		cape("Glacier", "glacier"),
+		cape("Circuit", "circuit"));
+
+	public static final List<Cape> LEGACY_CAPES = List.of(
+		new Cape("legacy_zyrox", "Classic", legacyTexture("zyrox")),
+		legacyCape("Aurora", "aurora"),
+		legacyCape("Ember", "ember"),
+		legacyCape("Void", "void"),
+		legacyCape("Ocean", "ocean"),
+		legacyCape("Sakura", "sakura"),
+		legacyCape("Forest", "forest"),
+		legacyCape("Royal", "royal"),
+		legacyCape("Frost", "frost"),
+		legacyCape("Carbon", "carbon"));
 
 	private static Identifier particleIcon(String name) {
 		return Identifier.withDefaultNamespace("textures/particle/" + name + ".png");
@@ -43,16 +75,54 @@ public final class Cosmetics {
 		new Wearable("red_party_hat", "Party Hat"),
 		new Wearable("third_party_hat", "Striped Hat"));
 
+	public static String capeId = DEFAULT_CAPE;
 	public static String hatId = NOTHING;
 	public static int aura;
 
+	private static final Map<UUID, CachedSkin> SKINS = new ConcurrentHashMap<>();
 	private static long ticks;
 
 	private Cosmetics() {
 	}
 
+	private static Cape cape(String name, String texture) {
+		return new Cape(texture, name, new ClientAsset.ResourceTexture(Identifier.fromNamespaceAndPath(ZyroxClient.MOD_ID, "cape/" + texture)));
+	}
+
+	private static ClientAsset.Texture legacyTexture(String texture) {
+		return new ClientAsset.ResourceTexture(Identifier.fromNamespaceAndPath(ZyroxClient.MOD_ID, "cape/legacy/" + texture));
+	}
+
+	private static Cape legacyCape(String name, String texture) {
+		return new Cape(texture, name, legacyTexture(texture));
+	}
+
+	public static Cape capeById(String id) {
+		for (var cape : CAPES)
+			if (cape.id().equals(id))
+				return cape;
+		for (var cape : LEGACY_CAPES)
+			if (cape.id().equals(id))
+				return cape;
+		return null;
+	}
+
+	public static PlayerSkin apply(UUID player, boolean self, PlayerSkin skin) {
+		var id = self ? capeId : CloudCosmetics.item(player, CAPE_SLOT);
+		var cape = id == null ? null : capeById(id);
+		if (cape == null || cape.texture() == null)
+			return skin;
+		var cached = SKINS.get(player);
+		if (cached != null && cached.source() == skin && cached.cape().equals(id))
+			return cached.skin();
+		var result = new PlayerSkin(skin.body(), cape.texture(), skin.elytra(), skin.model(), skin.secure());
+		SKINS.put(player, new CachedSkin(skin, id, result));
+		return result;
+	}
+
 	public static Map<String, String> ownItems() {
 		var items = new LinkedHashMap<String, String>();
+		items.put(CAPE_SLOT, capeId);
 		items.put(HAT_SLOT, hatId);
 		return items;
 	}

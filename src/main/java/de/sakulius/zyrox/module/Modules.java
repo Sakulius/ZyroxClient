@@ -5,6 +5,9 @@ import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import net.minecraft.client.Minecraft;
+import net.minecraft.resources.Identifier;
+import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.item.BlockItem;
 
 public final class Modules {
 	private static final int RIGHT = 100_000;
@@ -17,8 +20,18 @@ public final class Modules {
 	public static final UtilityModule FULLBRIGHT = new UtilityModule("fullbright", "Fullbright", "See in the dark", false);
 	public static final UtilityModule AUTO_SPRINT = new UtilityModule("autosprint", "Auto Sprint", "Run automatically", false);
 
+	public static final UtilityModule BADGE = new UtilityModule("badge", "Zyrox Badge", "Mark Zyrox players by name", true);
+	public static final PvpModule TNT_TIMER = new PvpModule("tnt_timer", "TNT Timer", "Fuse time above TNT", true, Identifier.withDefaultNamespace("textures/block/tnt_side.png"), 16);
+	public static final Module WAYPOINTS = new Module("waypoints", "Show waypoints", "Name and distance on screen", Module.Category.WAYPOINTS, true) {
+	};
+
 	public static final LyricsModule LYRICS = new LyricsModule(-1, 30);
 	public static final NowPlayingModule NOW_PLAYING = new NowPlayingModule(100_000, 130);
+
+	private static final int CENTER = -1;
+	private static final float LOW_HEALTH = 6f;
+	private static final float LOW_ARMOR = 0.15f;
+	private static final EquipmentSlot[] ARMOR_SLOTS = { EquipmentSlot.HEAD, EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET };
 
 	public static final List<Module> ALL = List.of(
 		new TextHudModule("fps", "FPS", "Frames per second", true, 4, 4,
@@ -41,9 +54,46 @@ public final class Modules {
 		NOW_PLAYING,
 		ZOOM,
 		FULLBRIGHT,
-		AUTO_SPRINT);
+		AUTO_SPRINT,
+		BADGE,
+		TNT_TIMER,
+		new TextHudModule("combo", "Combo", "Hits in a row", Module.Category.PVP, CENTER, 130,
+			client -> PvpTracker.combo() + " Combo"),
+		new TextHudModule("reach", "Reach", "Distance of your last hit", Module.Category.PVP, CENTER, 147,
+			client -> PvpTracker.reachText()),
+		new ItemCounterModule(4, 140),
+		new TextHudModule("block_counter", "Blocks", "Blocks in your inventory", Module.Category.PVP, CENTER, 164, Modules::blocks),
+		new WarningModule("armor_warning", "Armor Alert", "Warns before armor breaks", CENTER, 96, "Armor low", Modules::armorWarning),
+		new WarningModule("low_health", "Low Health", "Warns at three hearts", CENTER, 80, "Low health", Modules::healthWarning),
+		WAYPOINTS);
 
 	private Modules() {
+	}
+
+	private static String blocks(Minecraft client) {
+		if (client.player == null)
+			return "0 Blocks";
+		int count = 0;
+		for (var stack : client.player.getInventory().getNonEquipmentItems())
+			if (stack.getItem() instanceof BlockItem)
+				count += stack.getCount();
+		if (client.player.getOffhandItem().getItem() instanceof BlockItem)
+			count += client.player.getOffhandItem().getCount();
+		return count + " Blocks";
+	}
+
+	private static String armorWarning(Minecraft client) {
+		float lowest = 1f;
+		for (var slot : ARMOR_SLOTS) {
+			var stack = client.player.getItemBySlot(slot);
+			if (stack.isDamageableItem() && stack.getMaxDamage() > 0)
+				lowest = Math.min(lowest, 1f - (float) stack.getDamageValue() / stack.getMaxDamage());
+		}
+		return lowest <= LOW_ARMOR ? "Armor low: " + Math.round(lowest * 100) + "%" : null;
+	}
+
+	private static String healthWarning(Minecraft client) {
+		return client.player.getHealth() <= LOW_HEALTH ? "Low health" : null;
 	}
 
 	private static String ping(Minecraft client) {

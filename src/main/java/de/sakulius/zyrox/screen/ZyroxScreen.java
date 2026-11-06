@@ -10,6 +10,8 @@ import de.sakulius.zyrox.module.HudModule;
 import de.sakulius.zyrox.module.Module;
 import de.sakulius.zyrox.module.Modules;
 import de.sakulius.zyrox.module.NowPlayingModule;
+import de.sakulius.zyrox.module.PvpModule;
+import de.sakulius.zyrox.module.Waypoints;
 import de.sakulius.zyrox.music.MusicManager;
 import de.sakulius.zyrox.music.SkyLyrics;
 import de.sakulius.zyrox.music.WindowsMediaSession;
@@ -94,8 +96,11 @@ public class ZyroxScreen extends Screen {
 	private static final int TILE_HEIGHT = 62;
 	private static final int TILE_PREVIEW = 44;
 	private static final int TILE_GAP = 5;
-	private static final List<String> COSMETIC_TABS = List.of("Hats", "Auras");
+	private static final List<String> COSMETIC_TABS = List.of("Capes", "Hats", "Auras");
 	private static final int LYRICS_OFFSET_MS = 250;
+	private static final int WAYPOINT_BUTTONS = 66;
+	private static final int WAYPOINT_EDIT = 40;
+	private static final int WAYPOINT_DELETE = 16;
 
 	private static final int PANEL_COLOR = 0xEE101116;
 	private static final int PANEL_BORDER = 0x1EFFFFFF;
@@ -110,6 +115,7 @@ public class ZyroxScreen extends Screen {
 	private static final int BLACK = 0xFF000000;
 
 	private static int cosmeticTab;
+	private static boolean legacyCapes;
 
 	private final Map<String, Float> toggleAnim = new HashMap<>();
 	private final List<Page> pages;
@@ -148,9 +154,11 @@ public class ZyroxScreen extends Screen {
 		super(Component.literal("Zyrox Client"));
 		pages = List.of(
 			new Page("hud", "HUD", "Widgets and layout", icon("hud"), 0f, this::hudRows),
-			new Page("cosmetics", "Cosmetics", "Hats and auras", icon("cosmetics"), COSMETICS_ORBIT, this::cosmeticRows),
+			new Page("cosmetics", "Cosmetics", "Capes, hats and auras", icon("cosmetics"), COSMETICS_ORBIT, this::cosmeticRows),
 			new Page("music", "Music", "Lyrics and controls", icon("music"), 0f, this::musicRows),
 			new Page("utility", "Utility", "Zoom and helpers", icon("utility"), 0f, this::utilityRows),
+			new Page("pvp", "PvP", "Fight helpers", icon("pvp"), 0f, this::pvpRows),
+			new Page("waypoints", "Waypoints", "Mark your places", icon("waypoints"), 0f, this::waypointRows),
 			new Page("settings", "Settings", "Theme and camera", icon("settings"), 0f, this::settingRows));
 		selected = 1;
 		position = 1;
@@ -281,20 +289,41 @@ public class ZyroxScreen extends Screen {
 		var rows = new ArrayList<Row>();
 		rows.add(button("edit", "Edit HUD layout", this::enterEdit));
 		rows.add(toggle("chroma-hud", "Chroma HUD", "Rainbow HUD elements", () -> ZyroxTheme.chromaHud, on -> ZyroxTheme.chromaHud = on));
+		var tiles = new ArrayList<Tile>();
 		for (var module : Modules.ALL)
 			if (module.category == Module.Category.HUD)
-				rows.add(moduleToggle(module));
+				tiles.add(moduleTile(module, icon("hud/" + module.id), ICON_SIZE));
+		rows.add(tileGrid(tiles));
+		rows.add(note("Click a tile to turn it on or off."));
 		return rows;
+	}
+
+	private Tile moduleTile(Module module, Identifier image, int imageSize) {
+		return new Tile(module.name, () -> module.enabled, () -> module.enabled = !module.enabled, (graphics, x, y, size, alpha) -> {
+			int shown = size * 3 / 4;
+			graphics.blit(RenderPipelines.GUI_TEXTURED, image, x + (size - shown) / 2, y + (size - shown) / 2, 0f, 0f, shown, shown, imageSize, imageSize, imageSize, imageSize, Fx.alpha(TEXT, module.enabled ? alpha : alpha * 0.35f));
+		});
 	}
 
 	private List<Row> cosmeticRows() {
 		var rows = new ArrayList<Row>();
 		rows.add(cosmeticTabs());
-		rows.add(tileGrid(cosmeticTab == 0 ? hatTiles() : auraTiles()));
+		if (cosmeticTab == 0) {
+			rows.add(button("legacy-capes", legacyCapes ? "Back to capes" : "Legacy capes", () -> {
+				legacyCapes = !legacyCapes;
+				panelScroll = 0;
+				panelScrollTarget = 0;
+			}));
+		}
+		rows.add(tileGrid(switch (cosmeticTab) {
+			case 0 -> capeTiles(legacyCapes ? Cosmetics.LEGACY_CAPES : Cosmetics.CAPES);
+			case 1 -> hatTiles();
+			default -> auraTiles();
+		}));
 		rows.add(syncStatus());
-		if (cosmeticTab == 0)
+		if (cosmeticTab == 1)
 			rows.add(note("Hats step aside while you wear a helmet."));
-		else
+		else if (cosmeticTab == 2)
 			rows.add(note("Auras only show for you."));
 		rows.add(note("Drag next to the player to look around."));
 		return rows;
@@ -337,6 +366,20 @@ public class ZyroxScreen extends Screen {
 
 	private int cosmeticTabX(int x, int w, int index) {
 		return x + 8 + index * (cosmeticTabWidth(w) + TILE_GAP);
+	}
+
+	private List<Tile> capeTiles(List<Cosmetics.Cape> capes) {
+		var tiles = new ArrayList<Tile>();
+		for (var cape : capes) {
+			tiles.add(new Tile(cape.name(), () -> cape.id().equals(Cosmetics.capeId), () -> Cosmetics.capeId = cape.id(), (graphics, x, y, size, alpha) -> {
+				int capeWidth = size * 10 / 16;
+				if (cape.texture() != null)
+					graphics.blit(RenderPipelines.GUI_TEXTURED, cape.texture().texturePath(), x + (size - capeWidth) / 2, y, 1f, 1f, capeWidth, size, 10, 16, 64, 32, Fx.alpha(TEXT, alpha));
+				else
+					Type.REGULAR.centered(graphics, font, "Own", x + size / 2, y + size / 2 - 4, Fx.alpha(MUTED, alpha));
+			}));
+		}
+		return tiles;
 	}
 
 	private List<Tile> hatTiles() {
@@ -563,6 +606,72 @@ public class ZyroxScreen extends Screen {
 				ZyroxTheme.cinematic = on;
 				CameraRig.setActive(on);
 			}));
+	}
+
+	private List<Row> pvpRows() {
+		var tiles = new ArrayList<Tile>();
+		for (var module : Modules.ALL) {
+			if (module instanceof PvpModule pvp)
+				tiles.add(moduleTile(pvp, pvp.icon, pvp.iconSize));
+			else if (module.category == Module.Category.PVP)
+				tiles.add(moduleTile(module, icon("pvp/" + module.id), ICON_SIZE));
+		}
+		var rows = new ArrayList<Row>();
+		rows.add(tileGrid(tiles));
+		rows.add(note("Click a tile to turn it on or off."));
+		rows.add(note("Move them with Edit HUD layout."));
+		return rows;
+	}
+
+	private List<Row> waypointRows() {
+		var rows = new ArrayList<Row>();
+		rows.add(moduleToggle(Modules.WAYPOINTS));
+		if (!Waypoints.canAdd(minecraft)) {
+			rows.add(note("Join a world to use waypoints."));
+			return rows;
+		}
+		rows.add(button("add-waypoint", "Add waypoint here", () -> minecraft.gui.setScreen(new WaypointNameScreen(this, "New waypoint", Waypoints.nextName(minecraft), name -> Waypoints.add(minecraft, name)))));
+		var list = Waypoints.here(minecraft);
+		for (int i = 0; i < list.size(); i++)
+			rows.add(waypointRow("waypoint-" + i, list.get(i)));
+		rows.add(note("Press B in game for a new waypoint."));
+		return rows;
+	}
+
+	private Row waypointRow(String id, Waypoints.Waypoint waypoint) {
+		return new Row(id, ROW_HEIGHT) {
+			@Override
+			void draw(GuiGraphicsExtractor graphics, int x, int y, int w, int mouseX, int mouseY, float alpha) {
+				if (inside(mouseX, mouseY, x, y, w, height))
+					Draw.roundRect(graphics, x, y, w, height, ROW_RADIUS, Fx.alpha(HOVER, alpha));
+				Draw.roundRect(graphics, x + 7, y + 7, 6, 6, 3f, Fx.alpha(waypoint.color, waypoint.visible ? alpha : alpha * 0.35f));
+				int textWidth = w - WAYPOINT_BUTTONS - 18;
+				Type.SEMIBOLD.draw(graphics, font, fitted(waypoint.name, textWidth), x + 17, y + 6, Fx.alpha(waypoint.visible ? TEXT : MUTED, alpha));
+				Type.REGULAR.draw(graphics, font, fitted("%d, %d, %d  %d m".formatted(waypoint.x, waypoint.y, waypoint.z, Waypoints.distance(minecraft, waypoint)), textWidth), x + 17, y + 17, Fx.alpha(MUTED, alpha));
+				pill(graphics, x + w - WAYPOINT_BUTTONS, y + (height - SWITCH_HEIGHT) / 2, waypoint.visible ? 1f : 0f, ZyroxTheme.accent(), alpha);
+				Type.REGULAR.draw(graphics, font, "Edit", x + w - WAYPOINT_EDIT, y + 11, Fx.alpha(TEXT, alpha));
+				Type.REGULAR.centered(graphics, font, "x", x + w - WAYPOINT_DELETE / 2, y + 11, Fx.alpha(0xFFFF6B6B, alpha));
+			}
+
+			@Override
+			void click(double mouseX, int x, int y, int w) {
+				double from = x + w - mouseX;
+				if (from <= WAYPOINT_DELETE) {
+					Waypoints.remove(minecraft, waypoint);
+				} else if (from <= WAYPOINT_EDIT) {
+					minecraft.gui.setScreen(new WaypointNameScreen(ZyroxScreen.this, "Rename waypoint", waypoint.name, name -> {
+						waypoint.name = name;
+						Waypoints.save();
+					}));
+				} else if (from <= WAYPOINT_BUTTONS) {
+					waypoint.visible = !waypoint.visible;
+					Waypoints.save();
+				} else {
+					return;
+				}
+				playClick(1.2f);
+			}
+		};
 	}
 
 	private int cardHeight() {

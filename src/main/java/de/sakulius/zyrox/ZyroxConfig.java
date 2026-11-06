@@ -47,6 +47,8 @@ public final class ZyroxConfig {
 				ZyroxTheme.index = Math.clamp(intOr(settings, "theme", ZyroxTheme.index), 0, ZyroxTheme.CHOICES.size() - 1);
 				ZyroxTheme.chromaHud = boolOr(settings, "chromaHud", ZyroxTheme.chromaHud);
 				ZyroxTheme.cinematic = boolOr(settings, "cinematic", ZyroxTheme.cinematic);
+				if (settings.has("cape") && settings.get("cape").isJsonPrimitive() && Cosmetics.capeById(settings.get("cape").getAsString()) != null)
+					Cosmetics.capeId = settings.get("cape").getAsString();
 				if (settings.has("hat"))
 					Cosmetics.hatId = settings.get("hat").getAsString();
 				Cosmetics.aura = Math.clamp(intOr(settings, "aura", Cosmetics.aura), 0, Cosmetics.AURAS.size() - 1);
@@ -79,6 +81,7 @@ public final class ZyroxConfig {
 		settings.addProperty("theme", ZyroxTheme.index);
 		settings.addProperty("chromaHud", ZyroxTheme.chromaHud);
 		settings.addProperty("cinematic", ZyroxTheme.cinematic);
+		settings.addProperty("cape", Cosmetics.capeId);
 		settings.addProperty("hat", Cosmetics.hatId);
 		settings.addProperty("aura", Cosmetics.aura);
 		settings.addProperty("onlySpotify", MusicManager.onlySpotify);

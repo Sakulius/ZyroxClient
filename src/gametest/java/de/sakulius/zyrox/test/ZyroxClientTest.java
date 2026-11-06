@@ -15,6 +15,11 @@ import de.sakulius.zyrox.module.Modules;
 import de.sakulius.zyrox.music.Lyrics;
 import de.sakulius.zyrox.music.MusicManager;
 import de.sakulius.zyrox.music.WindowsMediaSession;
+import de.sakulius.zyrox.module.PvpTracker;
+import de.sakulius.zyrox.module.TntTimer;
+import de.sakulius.zyrox.module.Waypoints;
+import de.sakulius.zyrox.screen.WaypointNameScreen;
+import de.sakulius.zyrox.screen.ZyroxMenuButton;
 import de.sakulius.zyrox.screen.ZyroxScreen;
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -35,6 +40,7 @@ import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
 import net.minecraft.client.CameraType;
 import net.minecraft.client.gui.screens.TitleScreen;
+import net.minecraft.client.gui.screens.options.OptionsScreen;
 import net.minecraft.client.player.RemotePlayer;
 import net.minecraft.world.entity.Entity;
 
@@ -57,6 +63,7 @@ public class ZyroxClientTest implements FabricClientGameTest {
 		ZyroxTheme.index = 1;
 		ZyroxTheme.chromaHud = false;
 		ZyroxTheme.cinematic = true;
+		Cosmetics.capeId = Cosmetics.DEFAULT_CAPE;
 		Cosmetics.hatId = Cosmetics.NOTHING;
 		Cosmetics.aura = 0;
 		var coordinates = (HudModule) find("coordinates");
@@ -74,6 +81,10 @@ public class ZyroxClientTest implements FabricClientGameTest {
 			testMusic(context);
 			testCloud(context);
 			testWearables(context);
+			testWaypoints(context, server);
+			testBadge(context);
+			testTntTimer(context, server);
+			testPvpModules(context, server);
 			scale = context.computeOnClient(client -> (double) client.getWindow().getGuiScale());
 			server.runCommand("effect give @a speed 300 1");
 			server.runCommand("item replace entity @a armor.chest with iron_chestplate");
@@ -116,8 +127,15 @@ public class ZyroxClientTest implements FabricClientGameTest {
 			check(screen().isPanelOpen(), "clicking the middle card opens its menu");
 			context.waitTicks(ANIMATION_TICKS);
 			context.takeScreenshot("zyrox-hud-panel");
-			clickOn(screen -> screen.rowCenter("fps"));
-			check(!fps.enabled, "clicking a row turns the module off");
+			clickOn(screen -> screen.tileCenter(0));
+			check(!fps.enabled, "clicking a tile turns the module off");
+			context.waitTicks(10);
+			context.takeScreenshot("zyrox-hud-grid");
+			input.scroll(-6);
+			context.waitTicks(15);
+			context.takeScreenshot("zyrox-hud-grid-lower");
+			input.scroll(6);
+			context.waitTicks(15);
 
 			clickOn(screen -> screen.rowCenter("edit"));
 			check(screen().isEditing(), "the button opens edit mode");
@@ -139,7 +157,6 @@ public class ZyroxClientTest implements FabricClientGameTest {
 
 			var keystrokes = (HudModule) find("keystrokes");
 			keystrokes.setScale(1f);
-			Cosmetics.hatId = Cosmetics.NOTHING;
 			int fullWidth = context.computeOnClient(keystrokes::width);
 			int[] grab = context.computeOnClient(client -> new int[] { keystrokes.left(client) + keystrokes.width(client) - 1, keystrokes.top(client) + keystrokes.height(client) - 1 });
 			input.setCursorPos(grab[0] * scale, grab[1] * scale);
@@ -178,11 +195,32 @@ public class ZyroxClientTest implements FabricClientGameTest {
 			check(screen().selectedId().equals("cosmetics"), "the arrow key moves the cards");
 			clickOn(ZyroxScreen::centerCard);
 			context.waitTicks(4);
+			clickOn(screen -> screen.cosmeticTabCenter(0));
+			clickOn(screen -> screen.rowCenter("legacy-capes"));
+			context.waitTicks(10);
+			clickOn(screen -> screen.tileCenter(1));
+			check(Cosmetics.capeId.equals("aurora"), "the legacy button shows the old capes, now " + Cosmetics.capeId);
+			check(context.computeOnClient(client -> client.player.getSkin().cape()) == Cosmetics.capeById("aurora").texture(), "an old cape can be worn");
+			context.waitTicks(10);
+			context.takeScreenshot("cosmetics-legacy");
+			input.scroll(-6);
+			context.waitTicks(15);
+			context.takeScreenshot("cosmetics-legacy-lower");
+			input.scroll(6);
+			context.waitTicks(15);
+			clickOn(screen -> screen.rowCenter("legacy-capes"));
+			context.waitTicks(10);
+			clickOn(screen -> screen.tileCenter(2));
+			check(Cosmetics.capeId.equals("nebula"), "clicking a tile selects the cape, now " + Cosmetics.capeId);
+			check(context.computeOnClient(client -> client.player.getSkin().cape()) == Cosmetics.capeById("nebula").texture(), "the own cape changes right away");
+			context.waitTicks(10);
+			context.takeScreenshot("cosmetics-capes");
+			clickOn(screen -> screen.cosmeticTabCenter(1));
 			clickOn(screen -> screen.tileCenter(1));
 			check(Cosmetics.hatId.equals("party_hat"), "clicking a hat wears it, now " + Cosmetics.hatId);
 			context.waitTicks(10);
 			context.takeScreenshot("cosmetics-hats");
-			clickOn(screen -> screen.cosmeticTabCenter(1));
+			clickOn(screen -> screen.cosmeticTabCenter(2));
 			clickOn(screen -> screen.tileCenter(1));
 			check(Cosmetics.aura == 1, "clicking an aura picks it, now " + Cosmetics.aura);
 			context.waitTicks(10);
@@ -212,7 +250,28 @@ public class ZyroxClientTest implements FabricClientGameTest {
 			input.pressKey(InputConstants.KEY_RIGHT);
 			input.pressKey(InputConstants.KEY_RIGHT);
 			context.waitTicks(ANIMATION_TICKS);
-			check(screen().selectedId().equals("settings"), "two more steps reach the settings card");
+			check(screen().selectedId().equals("pvp"), "two more steps reach the pvp card");
+			context.takeScreenshot("zyrox-pvp-card");
+			clickOn(ZyroxScreen::centerCard);
+			context.waitTicks(ANIMATION_TICKS);
+			context.takeScreenshot("zyrox-pvp");
+			clickOn(screen -> screen.tileCenter(0));
+			check(!Modules.TNT_TIMER.enabled, "a click on the tile turns the tnt timer off");
+			clickOn(screen -> screen.tileCenter(0));
+			check(Modules.TNT_TIMER.enabled, "a second click turns it on again");
+			input.pressKey(InputConstants.KEY_ESCAPE);
+			context.waitTicks(10);
+			input.pressKey(InputConstants.KEY_RIGHT);
+			context.waitTicks(ANIMATION_TICKS);
+			check(screen().selectedId().equals("waypoints"), "the next card holds the waypoints");
+			clickOn(ZyroxScreen::centerCard);
+			context.waitTicks(ANIMATION_TICKS);
+			context.takeScreenshot("zyrox-waypoints");
+			input.pressKey(InputConstants.KEY_ESCAPE);
+			context.waitTicks(10);
+			input.pressKey(InputConstants.KEY_RIGHT);
+			context.waitTicks(ANIMATION_TICKS);
+			check(screen().selectedId().equals("settings"), "one more step reaches the settings card");
 			clickOn(ZyroxScreen::centerCard);
 			context.waitTicks(ANIMATION_TICKS);
 			context.takeScreenshot("zyrox-settings");
@@ -230,8 +289,115 @@ public class ZyroxClientTest implements FabricClientGameTest {
 			ZyroxConfig.load();
 			check(!fps.enabled && coordinates.x == movedX && Cosmetics.hatId.equals("party_hat"), "closing saves the settings and they load back");
 			check(keystrokes.scale == 0.5f, "the size is saved too, now " + keystrokes.scale);
+			check(Cosmetics.capeId.equals("nebula"), "the cape is saved too, now " + Cosmetics.capeId);
 			keystrokes.setScale(1f);
+			Cosmetics.capeId = Cosmetics.DEFAULT_CAPE;
+			Cosmetics.hatId = Cosmetics.NOTHING;
 		}
+	}
+
+	private void testWaypoints(ClientGameTestContext context, net.fabricmc.fabric.api.client.gametest.v1.context.TestServerContext server) {
+		var input = context.getInput();
+		Modules.WAYPOINTS.enabled = true;
+		int before = context.computeOnClient(client -> Waypoints.here(client).size());
+		input.pressKey(ZyroxClient.waypointKey);
+		context.waitTicks(4);
+		check(context.computeOnClient(client -> client.gui.screen() instanceof WaypointNameScreen), "the waypoint key asks for a name");
+		context.takeScreenshot("waypoint-name");
+		input.pressKey(InputConstants.KEY_END);
+		for (int i = 0; i < 12; i++)
+			input.pressKey(InputConstants.KEY_BACKSPACE);
+		input.typeChars("Home");
+		input.pressKey(InputConstants.KEY_RETURN);
+		context.waitTicks(4);
+		check(context.computeOnClient(client -> client.gui.screen() == null), "enter closes the name box");
+		check(context.computeOnClient(client -> Waypoints.here(client).size()) == before + 1, "the waypoint is saved");
+		check(context.computeOnClient(client -> Waypoints.here(client).getLast().name).equals("Home"), "the waypoint has the typed name");
+		server.runCommand("tp @a ~ ~ ~6");
+		context.waitTicks(10);
+		context.takeScreenshot("waypoint-world");
+		float[] middle = context.computeOnClient(client -> {
+			var look = client.player.getLookAngle();
+			var eye = client.player.getEyePosition();
+			return Waypoints.project(client, eye.x + look.x * 8, eye.y + look.y * 8, eye.z + look.z * 8, 400, 200);
+		});
+		check(Math.abs(middle[0] - 200) < 2 && Math.abs(middle[1] - 100) < 2, "a point straight ahead lands in the middle, got " + middle[0] + ", " + middle[1]);
+		float[] behind = context.computeOnClient(client -> {
+			var look = client.player.getLookAngle();
+			var eye = client.player.getEyePosition();
+			return Waypoints.project(client, eye.x - look.x * 8 + 1, eye.y, eye.z - look.z * 8, 400, 200);
+		});
+		check(behind[0] >= 0 && behind[0] <= 400 && behind[1] >= 0 && behind[1] <= 200, "a point behind stays on the screen");
+		context.runOnClient(client -> Waypoints.remove(client, Waypoints.here(client).getLast()));
+	}
+
+	private void testBadge(ClientGameTestContext context) {
+		var own = context.computeOnClient(client -> client.getUser().getProfileId());
+		Modules.BADGE.enabled = true;
+		check(context.computeOnClient(client -> de.sakulius.zyrox.module.ZyroxBadge.shows(own)), "the own name has the badge");
+		Modules.BADGE.enabled = false;
+		check(context.computeOnClient(client -> !de.sakulius.zyrox.module.ZyroxBadge.shows(own)), "the switch turns the badge off");
+		Modules.BADGE.enabled = true;
+		check(context.computeOnClient(client -> client.gui.hud.getTabList().getNameForDisplay(client.getConnection().getPlayerInfo(own)).getString().contains("")), "the tab list shows the badge");
+		var friend = UUID.fromString("11111111-2222-3333-4444-555555555555");
+		context.runOnClient(client -> {
+			var player = new RemotePlayer(client.level, new GameProfile(friend, "ZyroxFriend"));
+			player.setId(NEARBY_ENTITY);
+			var look = client.player.getLookAngle();
+			player.setPos(client.player.getX() + look.x * 4, client.player.getY(), client.player.getZ() + look.z * 4);
+			client.level.addEntity(player);
+		});
+		context.waitTicks(6);
+		context.takeScreenshot("badge-name");
+		context.runOnClient(client -> client.level.removeEntity(NEARBY_ENTITY, Entity.RemovalReason.DISCARDED));
+	}
+
+	private void testTntTimer(ClientGameTestContext context, net.fabricmc.fabric.api.client.gametest.v1.context.TestServerContext server) {
+		check(TntTimer.seconds(80f).equals("4.0s"), "80 ticks are four seconds, got " + TntTimer.seconds(80f));
+		check(TntTimer.color(80f) != TntTimer.color(2f), "the label turns red near the end");
+		Modules.TNT_TIMER.enabled = true;
+		server.runCommand("execute at @a run summon tnt ^ ^1 ^5 {fuse:120}");
+		context.waitTicks(10);
+		context.takeScreenshot("tnt-timer");
+		server.runCommand("kill @e[type=tnt]");
+		context.waitTicks(2);
+	}
+
+	private void testPvpModules(ClientGameTestContext context, net.fabricmc.fabric.api.client.gametest.v1.context.TestServerContext server) {
+		var pvp = Modules.ALL.stream().filter(module -> module.category == Module.Category.PVP).toList();
+		check(pvp.size() == 7, "the PvP page has seven modules, got " + pvp.size());
+		pvp.forEach(module -> module.enabled = true);
+		server.runCommand("execute at @a run summon zombie ^ ^ ^2.5 {NoAI:1b,Silent:1b,Health:20f}");
+		server.runCommand("give @a ender_pearl 16");
+		server.runCommand("give @a totem_of_undying 2");
+		server.runCommand("give @a golden_apple 5");
+		server.runCommand("give @a arrow 32");
+		server.runCommand("give @a splash_potion 3");
+		server.runCommand("give @a cobblestone 40");
+		server.runCommand("item replace entity @a armor.feet with iron_boots[damage=190]");
+		context.waitTicks(10);
+		context.getInput().pressMouse(InputConstants.MOUSE_BUTTON_LEFT);
+		context.waitTicks(4);
+		check(PvpTracker.combo() == 1, "a landed hit counts for the combo, got " + PvpTracker.combo());
+		check(PvpTracker.reach() > 0.5f && PvpTracker.reach() < 3.5f, "the reach is measured, got " + PvpTracker.reach());
+		var counter = (HudModule) find("block_counter");
+		check(context.computeOnClient(client -> counter.width(client)) > 0, "the block counter has a size");
+		context.takeScreenshot("pvp-modules");
+		server.runCommand("damage @p 16");
+		context.waitTicks(4);
+		check(PvpTracker.combo() == 0, "getting hit ends the combo, got " + PvpTracker.combo());
+		context.takeScreenshot("pvp-warnings");
+		server.runCommand("effect give @a instant_health 1 5");
+		server.runCommand("kill @e[type=zombie]");
+		server.runCommand("clear @a ender_pearl");
+		server.runCommand("clear @a totem_of_undying");
+		server.runCommand("clear @a golden_apple");
+		server.runCommand("clear @a arrow");
+		server.runCommand("clear @a splash_potion");
+		server.runCommand("clear @a cobblestone");
+		server.runCommand("item replace entity @a armor.feet with air");
+		pvp.stream().filter(module -> module != Modules.TNT_TIMER).forEach(module -> module.enabled = false);
+		context.waitTicks(4);
 	}
 
 	private void testMenuSplash(ClientGameTestContext context) {
@@ -256,6 +422,20 @@ public class ZyroxClientTest implements FabricClientGameTest {
 		context.waitFor(client -> MenuSplash.text().equals("Hello from the web"), 100);
 		context.waitTicks(40);
 		context.takeScreenshot("splash-web");
+		int[] options = context.computeOnClient(client -> {
+			for (var child : client.gui.screen().children())
+				if (child instanceof ZyroxMenuButton button && button.getMessage().getString().startsWith("Options"))
+					return new int[] { button.getX() + button.getWidth() / 2, button.getY() + button.getHeight() / 2, (int) client.getWindow().getGuiScale() };
+			throw new AssertionError("the menu has no restyled options button");
+		});
+		context.getInput().setCursorPos(options[0] * options[2], options[1] * options[2]);
+		context.waitTicks(10);
+		context.takeScreenshot("title-hover");
+		context.getInput().pressMouse(InputConstants.MOUSE_BUTTON_LEFT);
+		context.waitTicks(2);
+		check(context.computeOnClient(client -> client.gui.screen() instanceof OptionsScreen), "the restyled buttons still work");
+		context.getInput().pressKey(InputConstants.KEY_ESCAPE);
+		context.waitForScreen(TitleScreen.class);
 
 		gist.set("\n  \u00a7cChanged\u0007 text \nsecond line\n");
 		MenuSplash.refreshSoon();
@@ -316,6 +496,7 @@ public class ZyroxClientTest implements FabricClientGameTest {
 	private void testCloud(ClientGameTestContext context) {
 		check(CloudCosmetics.status() == CloudCosmetics.Status.NOT_SET_UP, "without a server cosmetics stay local");
 		var own = context.computeOnClient(client -> client.getUser().getProfileId());
+		var skin = context.computeOnClient(client -> client.player.getSkin());
 		CloudCosmetics.serverUrl = DEV_SERVER;
 		CloudCosmetics.prover = ZyroxClientTest::testProof;
 		Cosmetics.hatId = "party_hat";
@@ -326,6 +507,12 @@ public class ZyroxClientTest implements FabricClientGameTest {
 		context.waitTicks(100);
 		saved = get("/v1/loadouts?uuids=" + own.toString().replace("-", ""));
 		check(saved.contains("red_party_hat"), "a new hat reaches the server too, got " + saved);
+		Cosmetics.capeId = "glacier";
+		context.waitTicks(100);
+		saved = get("/v1/loadouts?uuids=" + own.toString().replace("-", ""));
+		check(saved.contains("glacier"), "the cape reaches the server, got " + saved);
+		check(Cosmetics.apply(own, true, skin).cape() == Cosmetics.capeById("glacier").texture(), "the own cape comes from the local choice");
+		Cosmetics.capeId = Cosmetics.DEFAULT_CAPE;
 
 		var other = UUID.fromString("11111111-2222-3333-4444-555555555555");
 		var unknown = UUID.fromString("11111111-2222-3333-4444-666666666666");
@@ -335,6 +522,9 @@ public class ZyroxClientTest implements FabricClientGameTest {
 		context.waitFor(client -> "from_the_future".equals(CloudCosmetics.item(unknown, "hat")) && "party_hat".equals(CloudCosmetics.item(other, "hat")), 400);
 
 		check(Cosmetics.hat(other, false).id().equals("party_hat"), "other players show the hat from the server");
+		check(CloudCosmetics.usesZyrox(other), "a player with a loadout counts as a Zyrox player");
+		check(context.computeOnClient(client -> de.sakulius.zyrox.module.ZyroxBadge.decorate(other, net.minecraft.network.chat.Component.literal("Other")).getString().contains("\ue000")), "Zyrox players get the badge");
+		check(context.computeOnClient(client -> !de.sakulius.zyrox.module.ZyroxBadge.decorate(UUID.fromString("11111111-2222-3333-4444-888888888888"), net.minecraft.network.chat.Component.literal("Stranger")).getString().contains("\ue000")), "other players do not get the badge");
 		check(Cosmetics.hat(unknown, false) == null, "unknown items are ignored");
 		check(Cosmetics.hat(own, true).id().equals("red_party_hat"), "the own hat comes from the local choice");
 

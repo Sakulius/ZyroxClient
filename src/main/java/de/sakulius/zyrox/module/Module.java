@@ -4,7 +4,9 @@ public abstract class Module {
 	public enum Category {
 		HUD,
 		MUSIC,
-		UTILITY
+		UTILITY,
+		PVP,
+		WAYPOINTS
 	}
 
 	public final String id;

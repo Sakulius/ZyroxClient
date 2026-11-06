@@ -1,33 +1,108 @@
 package de.sakulius.zyrox.mixin;
 
 import de.sakulius.zyrox.module.MenuSplash;
+import de.sakulius.zyrox.screen.ZyroxMenuButton;
+import de.sakulius.zyrox.screen.ZyroxTitle;
+import java.util.ArrayList;
+import java.util.Comparator;
+import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.components.AbstractWidget;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.LogoRenderer;
+import net.minecraft.client.gui.components.PlainTextButton;
 import net.minecraft.client.gui.components.SplashRenderer;
+import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.TitleScreen;
+import net.minecraft.network.chat.Component;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(TitleScreen.class)
-public class TitleScreenMixin {
+public abstract class TitleScreenMixin extends Screen {
+	@Unique
+	private static final int ZYROX_WIDE_BUTTON = 90;
+
 	@Shadow
 	private SplashRenderer splash;
 
+	@Shadow
+	private boolean fading;
+
+	@Shadow
+	private long fadeInStart;
+
 	@Unique
 	private SplashRenderer zyrox$gameSplash;
+
+	protected TitleScreenMixin(Component title) {
+		super(title);
+	}
 
 	@Inject(method = "init", at = @At("TAIL"))
 	private void zyrox$init(CallbackInfo ci) {
 		if (zyrox$gameSplash == null)
 			zyrox$gameSplash = splash;
+		var wide = new ArrayList<Button>();
+		var small = new ArrayList<AbstractWidget>();
+		for (var child : children()) {
+			if (child instanceof PlainTextButton)
+				continue;
+			if (child instanceof Button button && button.getWidth() >= ZYROX_WIDE_BUTTON)
+				wide.add(button);
+			else if (child instanceof AbstractWidget widget && widget.getWidth() < ZYROX_WIDE_BUTTON)
+				small.add(widget);
+		}
+		Comparator<AbstractWidget> reading = Comparator.comparingInt(AbstractWidget::getY).thenComparingInt(AbstractWidget::getX);
+		wide.sort(reading);
+		small.sort(reading);
+
+		int top = ZyroxTitle.columnTop(height, wide.size());
+		ZyroxTitle.layout(top);
+		int y = top + ZyroxTitle.HEADER_HEIGHT;
+		for (var button : wide) {
+			removeWidget(button);
+			addRenderableWidget(new ZyroxMenuButton(button, ZyroxTitle.COLUMN_X, y, ZyroxTitle.COLUMN_WIDTH, ZyroxTitle.BUTTON_HEIGHT));
+			y += ZyroxTitle.BUTTON_STEP;
+		}
+		int x = ZyroxTitle.COLUMN_X;
+		for (var widget : small) {
+			widget.setX(x);
+			widget.setY(y);
+			x += ZyroxTitle.ICON_STEP;
+		}
+	}
+
+	@Inject(method = "realmsNotificationsEnabled", at = @At("HEAD"), cancellable = true)
+	private void zyrox$noRealmsIcons(CallbackInfoReturnable<Boolean> cir) {
+		cir.setReturnValue(false);
 	}
 
 	@Inject(method = "extractRenderState", at = @At("HEAD"))
 	private void zyrox$useText(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta, CallbackInfo ci) {
 		var custom = MenuSplash.custom();
 		splash = custom != null ? custom : zyrox$gameSplash;
+	}
+
+	@Inject(method = "extractRenderState", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/gui/screens/Screen;extractRenderState(Lnet/minecraft/client/gui/GuiGraphicsExtractor;IIF)V"))
+	private void zyrox$background(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta, CallbackInfo ci) {
+		ZyroxTitle.background(graphics, width, height, 1f);
+	}
+
+	@Redirect(method = "extractRenderState", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/gui/components/LogoRenderer;extractRenderState(Lnet/minecraft/client/gui/GuiGraphicsExtractor;IF)V"))
+	private void zyrox$logo(LogoRenderer logo, GuiGraphicsExtractor graphics, int width, float alpha) {
+		ZyroxTitle.logo(graphics, alpha);
+		ZyroxTitle.version(graphics, font, height, alpha);
+	}
+
+	@Redirect(method = "extractRenderState", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/gui/components/SplashRenderer;extractRenderState(Lnet/minecraft/client/gui/GuiGraphicsExtractor;ILnet/minecraft/client/gui/Font;F)V"))
+	private void zyrox$splash(SplashRenderer renderer, GuiGraphicsExtractor graphics, int width, Font font, float alpha) {
+		ZyroxTitle.splash(graphics, font, ((SplashRendererAccessor) renderer).zyrox$text(), alpha);
 	}
 }

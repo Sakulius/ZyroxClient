@@ -20,6 +20,11 @@ public class TextHudModule extends HudModule {
 		this.text = text;
 	}
 
+	public TextHudModule(String id, String name, String description, Category category, int x, int y, Function<Minecraft, String> text) {
+		super(id, name, description, category, false, x, y);
+		this.text = text;
+	}
+
 	@Override
 	public int contentWidth(Minecraft client) {
 		return Type.REGULAR.width(client.font, text.apply(client)) + PADDING_X * 2;

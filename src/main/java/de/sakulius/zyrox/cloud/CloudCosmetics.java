@@ -58,6 +58,8 @@ public final class CloudCosmetics {
 	private static final int MAX_REMEMBERED = 500;
 	private static final long REFRESH_MS = 5_000;
 	private static final long IDLE_REFRESH_MS = 20_000;
+	private static final long TAB_REFRESH_MS = 300_000;
+	private static final int ACCOUNT_UUID_VERSION = 4;
 	private static final long RETRY_MS = 60_000;
 	private static final long TOO_FAST_RETRY_MS = 3_000;
 	private static final int CERTIFICATE_TIMEOUT_SECONDS = 20;
@@ -95,6 +97,11 @@ public final class CloudCosmetics {
 		return loadout == null ? null : loadout.items().get(slot);
 	}
 
+	public static boolean usesZyrox(UUID player) {
+		var loadout = LOADOUTS.get(player);
+		return loadout != null && !loadout.items().isEmpty();
+	}
+
 	public static void tick(Minecraft client) {
 		if (++ticks % TICKS_BETWEEN_CHECKS != 0 || serverUrl.isBlank() || client.player == null || client.level == null)
 			return;
@@ -116,10 +123,23 @@ public final class CloudCosmetics {
 			if (known == null || now - known.fetchedAt() >= (known.items().isEmpty() ? IDLE_REFRESH_MS : REFRESH_MS))
 				wanted.add(id);
 		}
+		var connection = client.getConnection();
+		if (connection != null) {
+			for (var info : connection.getOnlinePlayers()) {
+				var id = info.getProfile().id();
+				if (wanted.size() >= MAX_BATCH)
+					break;
+				if (id.version() != ACCOUNT_UUID_VERSION || id.equals(client.player.getUUID()) || wanted.contains(id))
+					continue;
+				var known = LOADOUTS.get(id);
+				if (known == null || now - known.fetchedAt() >= TAB_REFRESH_MS)
+					wanted.add(id);
+			}
+		}
 		if (!wanted.isEmpty() && !fetching)
 			request(wanted);
 		if (LOADOUTS.size() > MAX_REMEMBERED)
-			LOADOUTS.values().removeIf(loadout -> now - loadout.fetchedAt() > IDLE_REFRESH_MS);
+			LOADOUTS.values().removeIf(loadout -> now - loadout.fetchedAt() > TAB_REFRESH_MS);
 	}
 
 	public static void request(List<UUID> players) {

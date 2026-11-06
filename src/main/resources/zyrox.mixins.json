@@ -3,12 +3,17 @@
 	"package": "de.sakulius.zyrox.mixin",
 	"compatibilityLevel": "JAVA_25",
 	"client": [
+		"AbstractClientPlayerMixin",
+		"AvatarRendererMixin",
 		"CameraMixin",
 		"HudMixin",
 		"LightmapMixin",
 		"LivingEntityRendererMixin",
 		"MouseHandlerMixin",
-		"TitleScreenMixin"
+		"PlayerTabOverlayMixin",
+		"SplashRendererAccessor",
+		"TitleScreenMixin",
+		"TntRendererMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1
