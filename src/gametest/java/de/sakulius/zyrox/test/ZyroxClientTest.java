@@ -296,7 +296,7 @@ public class ZyroxClientTest implements FabricClientGameTest {
 	}
 
 	private void testWearables(ClientGameTestContext context) {
-		var worn = List.of("party_hat", "red_party_hat");
+		var worn = List.of("party_hat", "red_party_hat", "third_party_hat");
 		for (var id : worn) {
 			Cosmetics.hatId = id;
 			context.runOnClient(client -> client.options.setCameraType(CameraType.THIRD_PERSON_FRONT));

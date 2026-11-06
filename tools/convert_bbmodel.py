@@ -51,13 +51,15 @@ def bake(element, resolution):
 def main():
     source, cosmetic = sys.argv[1], sys.argv[2]
     model = json.loads(Path(source).read_text(encoding="utf-8"))
-    if len(model["textures"]) != 1:
+    used = {face.get("texture") for element in model["elements"] for face in element.get("faces", {}).values()} - {None}
+    if len(used) != 1:
         raise SystemExit("Only models with one texture are supported")
+    source = next(texture for index, texture in enumerate(model["textures"]) if index in used or texture.get("id") in used)["source"]
     head = model["display"]["head"]
 
     texture = ASSETS / "textures/cosmetic" / f"{cosmetic}.png"
     texture.parent.mkdir(parents=True, exist_ok=True)
-    texture.write_bytes(base64.b64decode(model["textures"][0]["source"].split(",", 1)[1]))
+    texture.write_bytes(base64.b64decode(source.split(",", 1)[1]))
 
     quads = []
     for element in model["elements"]:

@@ -40,7 +40,8 @@ public final class Cosmetics {
 	public static final List<Wearable> HATS = List.of(
 		new Wearable(NOTHING, "Off"),
 		new Wearable("party_hat", "Rainbow Hat"),
-		new Wearable("red_party_hat", "Party Hat"));
+		new Wearable("red_party_hat", "Party Hat"),
+		new Wearable("third_party_hat", "Striped Hat"));
 
 	public static String hatId = NOTHING;
 	public static int aura;
