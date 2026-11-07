@@ -12,7 +12,6 @@ import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.Button;
-import net.minecraft.client.gui.components.FriendsButton;
 import net.minecraft.client.gui.components.LogoRenderer;
 import net.minecraft.client.gui.components.PlainTextButton;
 import net.minecraft.client.gui.components.SplashRenderer;
@@ -53,16 +52,11 @@ public abstract class TitleScreenMixin extends Screen {
 	private void zyrox$init(CallbackInfo ci) {
 		if (zyrox$gameSplash == null)
 			zyrox$gameSplash = splash;
-		FriendsButton friends = null;
 		var wide = new ArrayList<Button>();
 		var small = new ArrayList<AbstractWidget>();
 		for (var child : children()) {
 			if (child instanceof PlainTextButton)
 				continue;
-			if (child instanceof FriendsButton found) {
-				friends = found;
-				continue;
-			}
 			if (child instanceof Button button && button.getWidth() >= ZYROX_WIDE_BUTTON)
 				wide.add(button);
 			else if (child instanceof AbstractWidget widget && widget.getWidth() < ZYROX_WIDE_BUTTON)
@@ -86,11 +80,11 @@ public abstract class TitleScreenMixin extends Screen {
 			widget.setY(y);
 			x += ZyroxTitle.ICON_STEP;
 		}
-		zyrox$rightSide(friends);
+		zyrox$rightSide();
 	}
 
 	@Unique
-	private void zyrox$rightSide(FriendsButton friends) {
+	private void zyrox$rightSide() {
 		int cardWidth = Math.clamp(Math.round(width * ZyroxTitle.NEWS_SHARE), ZyroxTitle.NEWS_MIN_WIDTH, ZyroxTitle.NEWS_MAX_WIDTH);
 		int cardHeight = cardWidth * 9 / 16;
 		int left = width - ZyroxTitle.SIDE_MARGIN - cardWidth;
@@ -98,14 +92,8 @@ public abstract class TitleScreenMixin extends Screen {
 		addRenderableWidget(new NewsCard(this, left, top, cardWidth, cardHeight));
 		int buttonsY = top + cardHeight + ZyroxTitle.SIDE_GAP;
 		int half = (cardWidth - ZyroxTitle.SIDE_GAP) / 2;
-		if (friends != null) {
-			removeWidget(friends);
-			var found = friends;
-			addRenderableWidget(new ZyroxMenuButton(Component.literal("Friends"), left, buttonsY, half, ZyroxTitle.BUTTON_HEIGHT, found::onPress, true));
-			addRenderableWidget(new ZyroxMenuButton(Component.literal("Cosmetics"), left + half + ZyroxTitle.SIDE_GAP, buttonsY, cardWidth - half - ZyroxTitle.SIDE_GAP, ZyroxTitle.BUTTON_HEIGHT, input -> minecraft.gui.setScreen(ZyroxScreen.cosmeticsFrom(this)), true));
-		} else {
-			addRenderableWidget(new ZyroxMenuButton(Component.literal("Cosmetics"), left, buttonsY, cardWidth, ZyroxTitle.BUTTON_HEIGHT, input -> minecraft.gui.setScreen(ZyroxScreen.cosmeticsFrom(this)), true));
-		}
+		addRenderableWidget(new ZyroxMenuButton(Component.literal("Friends"), left, buttonsY, half, ZyroxTitle.BUTTON_HEIGHT, input -> minecraft.gui.setScreen(ZyroxScreen.pageFrom(this, "friends")), true));
+		addRenderableWidget(new ZyroxMenuButton(Component.literal("Cosmetics"), left + half + ZyroxTitle.SIDE_GAP, buttonsY, cardWidth - half - ZyroxTitle.SIDE_GAP, ZyroxTitle.BUTTON_HEIGHT, input -> minecraft.gui.setScreen(ZyroxScreen.cosmeticsFrom(this)), true));
 		int modelTop = buttonsY + ZyroxTitle.BUTTON_HEIGHT + ZyroxTitle.SIDE_GAP;
 		int modelHeight = Math.min(height - ZyroxTitle.MODEL_BOTTOM - modelTop, Math.round(height * ZyroxTitle.MODEL_SHARE));
 		if (modelHeight >= ZyroxTitle.MODEL_MIN_HEIGHT) {

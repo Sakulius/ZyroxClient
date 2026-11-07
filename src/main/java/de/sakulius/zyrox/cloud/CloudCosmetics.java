@@ -48,7 +48,7 @@ public final class CloudCosmetics {
 	private record Loadout(Map<String, String> items, long fetchedAt) {
 	}
 
-	private record Answer(int status, JsonObject body) {
+	public record Answer(int status, JsonObject body) {
 	}
 
 	private static final Logger LOGGER = LoggerFactory.getLogger(ZyroxClient.MOD_ID);
@@ -142,6 +142,23 @@ public final class CloudCosmetics {
 			LOADOUTS.values().removeIf(loadout -> now - loadout.fetchedAt() > TAB_REFRESH_MS);
 	}
 
+	public static void submit(Runnable task) {
+		WORKER.execute(task);
+	}
+
+	public static Answer call(Minecraft client, String method, String path, JsonObject body) throws Exception {
+		var player = client.getUser().getProfileId();
+		var token = readToken(player);
+		if (token == null)
+			token = signIn(client, player);
+		var answer = send(method, path, body, token);
+		if (answer.status() == HTTP_UNAUTHORIZED) {
+			token = signIn(client, player);
+			answer = send(method, path, body, token);
+		}
+		return answer;
+	}
+
 	public static void request(List<UUID> players) {
 		long now = System.currentTimeMillis();
 		for (var id : players)
@@ -159,6 +176,7 @@ public final class CloudCosmetics {
 			if (answer.status() != HTTP_OK)
 				return;
 			var loadouts = answer.body().getAsJsonObject("loadouts");
+			var roles = answer.body().has("roles") && answer.body().get("roles").isJsonObject() ? answer.body().getAsJsonObject("roles") : null;
 			long now = System.currentTimeMillis();
 			for (var id : players) {
 				var items = new ConcurrentHashMap<String, String>();
@@ -168,6 +186,7 @@ public final class CloudCosmetics {
 							items.put(entry.getKey(), entry.getValue().getAsString());
 				}
 				LOADOUTS.put(id, new Loadout(items, now));
+				Roles.put(id, roles != null && roles.has(compact(id)) ? Roles.Role.of(roles.get(compact(id)).getAsString()) : null);
 			}
 		} catch (IOException | RuntimeException e) {
 			LOGGER.debug("Could not load cosmetics", e);

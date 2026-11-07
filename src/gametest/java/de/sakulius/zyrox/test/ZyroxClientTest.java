@@ -16,15 +16,19 @@ import de.sakulius.zyrox.module.Modules;
 import de.sakulius.zyrox.music.Lyrics;
 import de.sakulius.zyrox.music.MusicManager;
 import de.sakulius.zyrox.music.WindowsMediaSession;
+import de.sakulius.zyrox.cloud.Friends;
+import de.sakulius.zyrox.cloud.Roles;
+import de.sakulius.zyrox.emote.Emotes;
 import de.sakulius.zyrox.module.News;
 import de.sakulius.zyrox.module.PvpTracker;
 import de.sakulius.zyrox.module.TntTimer;
 import de.sakulius.zyrox.module.Waypoints;
+import de.sakulius.zyrox.screen.EmoteWheelScreen;
 import de.sakulius.zyrox.screen.Glass;
 import de.sakulius.zyrox.screen.NewsCard;
 import de.sakulius.zyrox.screen.NewsScreen;
 import de.sakulius.zyrox.screen.PlayerPreviewWidget;
-import de.sakulius.zyrox.screen.WaypointNameScreen;
+import de.sakulius.zyrox.screen.NameScreen;
 import de.sakulius.zyrox.screen.ZyroxMenuButton;
 import de.sakulius.zyrox.screen.ZyroxScreen;
 import java.io.IOException;
@@ -44,6 +48,7 @@ import java.util.function.Function;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
+import net.minecraft.network.chat.Component;
 import net.minecraft.client.CameraType;
 import net.minecraft.client.gui.screens.TitleScreen;
 import net.minecraft.client.gui.screens.options.OptionsScreen;
@@ -92,6 +97,7 @@ public class ZyroxClientTest implements FabricClientGameTest {
 			testTntTimer(context, server);
 			testPvpModules(context, server);
 			testHudStyle(context, server);
+			testEmotes(context);
 			scale = context.computeOnClient(client -> (double) client.getWindow().getGuiScale());
 			server.runCommand("effect give @a speed 300 1");
 			server.runCommand("item replace entity @a armor.chest with iron_chestplate");
@@ -296,6 +302,9 @@ public class ZyroxClientTest implements FabricClientGameTest {
 			context.waitTicks(10);
 			input.pressKey(InputConstants.KEY_RIGHT);
 			context.waitTicks(ANIMATION_TICKS);
+			check(screen().selectedId().equals("friends"), "the next card holds the friends");
+			input.pressKey(InputConstants.KEY_RIGHT);
+			context.waitTicks(ANIMATION_TICKS);
 			check(screen().selectedId().equals("settings"), "one more step reaches the settings card");
 			clickOn(ZyroxScreen::centerCard);
 			context.waitTicks(ANIMATION_TICKS);
@@ -327,7 +336,7 @@ public class ZyroxClientTest implements FabricClientGameTest {
 		int before = context.computeOnClient(client -> Waypoints.here(client).size());
 		input.pressKey(ZyroxClient.waypointKey);
 		context.waitTicks(4);
-		check(context.computeOnClient(client -> client.gui.screen() instanceof WaypointNameScreen), "the waypoint key asks for a name");
+		check(context.computeOnClient(client -> client.gui.screen() instanceof NameScreen), "the waypoint key asks for a name");
 		context.takeScreenshot("waypoint-name");
 		input.pressKey(InputConstants.KEY_END);
 		for (int i = 0; i < 12; i++)
@@ -474,6 +483,144 @@ public class ZyroxClientTest implements FabricClientGameTest {
 		server.runCommand("execute at @a run fill ^-6 ^ ^3 ^6 ^3 ^3 minecraft:air");
 		server.runCommand("execute at @a run fill ^-1 ^2 ^2 ^1 ^3 ^2 minecraft:air");
 		context.waitTicks(2);
+	}
+
+	private static String signInAs(String uuid) throws Exception {
+		var challenge = com.google.gson.JsonParser.parseString(http(HttpRequest.newBuilder(URI.create(DEV_SERVER + "/v1/auth/start")).POST(HttpRequest.BodyPublishers.noBody()).build())).getAsJsonObject().get("challenge").getAsString();
+		var proof = testProof("zyrox-auth:" + challenge);
+		var body = new com.google.gson.JsonObject();
+		body.addProperty("challenge", challenge);
+		body.addProperty("uuid", uuid);
+		body.addProperty("publicKey", proof.publicKey());
+		body.addProperty("expiresAt", proof.expiresAt());
+		body.addProperty("keySignature", proof.keySignature());
+		body.addProperty("signature", proof.signature());
+		var answer = http(HttpRequest.newBuilder(URI.create(DEV_SERVER + "/v1/auth/finish")).POST(HttpRequest.BodyPublishers.ofString(body.toString())).build());
+		return com.google.gson.JsonParser.parseString(answer).getAsJsonObject().get("token").getAsString();
+	}
+
+	private static String as(String token, String method, String path, String body) {
+		return http(HttpRequest.newBuilder(URI.create(DEV_SERVER + path)).header("Authorization", "Bearer " + token)
+			.method(method, body == null ? HttpRequest.BodyPublishers.noBody() : HttpRequest.BodyPublishers.ofString(body)).build());
+	}
+
+	private void testFriends(ClientGameTestContext context) {
+		var own = context.computeOnClient(client -> client.getUser().getProfileId()).toString().replace("-", "");
+		var buddy = "22222222333344445555666666666666";
+		var pal = "22222222333344445555777777777777";
+		String buddyToken;
+		String palToken;
+		try {
+			buddyToken = signInAs(buddy);
+			palToken = signInAs(pal);
+		} catch (Exception e) {
+			throw new AssertionError("test friends could not sign in", e);
+		}
+		as(buddyToken, "PUT", "/v1/presence", "{\"name\":\"Buddy\",\"server\":\"mc.example.net\"}");
+		as(palToken, "PUT", "/v1/presence", "{\"name\":\"Pal\",\"server\":\"\"}");
+		as(buddyToken, "POST", "/v1/friends/request", "{\"uuid\":\"" + own + "\"}");
+		Friends.resolver = name -> name.equalsIgnoreCase("Pal") ? UUID.fromString("22222222-3333-4444-5555-777777777777") : null;
+		Friends.refreshSoon();
+		context.waitFor(client -> Friends.incoming().size() == 1, 200);
+		check(Friends.incoming().getFirst().name().equals("Buddy"), "the request shows the name, got " + Friends.incoming().getFirst().name());
+		context.runOnClient(client -> Friends.accept(client, Friends.incoming().getFirst()));
+		context.waitFor(client -> Friends.friends().size() == 1 && Friends.incoming().isEmpty(), 200);
+		var friend = Friends.friends().getFirst();
+		check(friend.online() && friend.server().equals("mc.example.net"), "a friend shows online with the server, got " + friend);
+		check(context.computeOnClient(client -> Friends.canJoin(client, friend)), "the friend can be joined");
+		context.runOnClient(client -> Friends.add(client, "Nobody"));
+		context.waitFor(client -> Friends.message().startsWith("There is no player"), 100);
+		context.runOnClient(client -> Friends.add(client, "Pal"));
+		context.waitFor(client -> Friends.outgoing().size() == 1, 200);
+		as(palToken, "POST", "/v1/friends/accept", "{\"uuid\":\"" + own + "\"}");
+		Friends.refreshSoon();
+		context.waitFor(client -> Friends.friends().size() == 2, 200);
+		context.waitFor(client -> as(buddyToken, "GET", "/v1/friends", null).contains(own), 100);
+		check(as(buddyToken, "GET", "/v1/friends", null).contains("\"online\":true"), "friends see you online too");
+		context.runOnClient(client -> client.gui.setScreen(ZyroxScreen.pageFrom(null, "friends")));
+		context.waitTicks(ANIMATION_TICKS);
+		context.takeScreenshot("friends");
+		context.getInput().pressKey(InputConstants.KEY_ESCAPE);
+		context.waitTicks(ANIMATION_TICKS);
+		context.getInput().pressKey(InputConstants.KEY_ESCAPE);
+		context.waitTicks(ANIMATION_TICKS);
+		check(context.computeOnClient(client -> client.gui.screen() == null), "the friends page closes");
+		context.runOnClient(client -> Friends.remove(client, UUID.fromString("22222222-3333-4444-5555-777777777777"), "Pal"));
+		context.waitFor(client -> Friends.friends().size() == 1, 200);
+	}
+
+	private void testRoles(ClientGameTestContext context) {
+		var ownId = context.computeOnClient(client -> client.getUser().getProfileId());
+		var own = ownId.toString().replace("-", "");
+		var pal = UUID.fromString("22222222-3333-4444-5555-777777777777");
+		Roles.refreshSoon();
+		context.waitTicks(40);
+		check(!Roles.isStaff(), "a normal player is not staff");
+		check(!context.computeOnClient(client -> new ZyroxScreen().pageIds().contains("staff")), "normal players have no staff page");
+		post("/__dev/role", "{\"uuid\":\"" + own + "\",\"role\":\"owner\",\"name\":\"Tester\"}");
+		Roles.refreshSoon();
+		context.waitFor(client -> Roles.isOwner(), 200);
+		check(context.computeOnClient(client -> de.sakulius.zyrox.module.ZyroxBadge.decorate(ownId, Component.literal("Me")).getString().contains("")), "the owner gets the crown");
+		Friends.resolver = name -> name.equalsIgnoreCase("Pal") ? pal : null;
+		context.runOnClient(client -> Roles.set(client, "Pal", Roles.Role.STAFF, null));
+		context.waitFor(client -> Roles.team().stream().anyMatch(member -> member.id().equals(pal) && member.role() == Roles.Role.STAFF), 200);
+		CloudCosmetics.request(List.of(pal));
+		context.waitFor(client -> Roles.of(pal) == Roles.Role.STAFF, 200);
+		check(context.computeOnClient(client -> de.sakulius.zyrox.module.ZyroxBadge.decorate(pal, Component.literal("Pal")).getString().contains("")), "staff get the shield in tab");
+		String palToken;
+		try {
+			palToken = signInAs(pal.toString().replace("-", ""));
+		} catch (Exception e) {
+			throw new AssertionError("pal could not sign in", e);
+		}
+		check(as(palToken, "POST", "/v1/roles", "{\"uuid\":\"" + own + "\",\"role\":\"\"}").contains("forbidden"), "staff cannot change roles");
+		context.runOnClient(client -> client.gui.setScreen(ZyroxScreen.pageFrom(null, "staff")));
+		context.waitTicks(ANIMATION_TICKS);
+		check(context.computeOnClient(client -> client.gui.screen() instanceof ZyroxScreen screen && screen.pageIds().contains("staff")), "the owner has a staff page");
+		context.takeScreenshot("staff");
+		context.runOnClient(client -> client.gui.setScreen(null));
+		context.runOnClient(client -> Roles.set(client, "Pal", null, null));
+		context.waitFor(client -> Roles.team().stream().noneMatch(member -> member.id().equals(pal)), 200);
+		check(context.computeOnClient(client -> Roles.of(pal) == null), "removing takes the role away");
+		post("/__dev/role", "{\"uuid\":\"" + own + "\",\"role\":\"none\"}");
+		Roles.refreshSoon();
+		context.waitFor(client -> !Roles.isStaff(), 200);
+	}
+
+	private void testEmotes(ClientGameTestContext context) {
+		var input = context.getInput();
+		check(context.computeOnClient(client -> Emotes.all().stream().anyMatch(emote -> emote.id().equals("wave"))), "the built in wave emote loads");
+		input.pressKey(ZyroxClient.emoteKey);
+		context.waitTicks(8);
+		check(context.computeOnClient(client -> client.gui.screen() instanceof EmoteWheelScreen), "the emote key opens the wheel");
+		context.takeScreenshot("emote-wheel");
+		int[] slot = context.computeOnClient(client -> {
+			var wheel = (EmoteWheelScreen) client.gui.screen();
+			int index = 0;
+			var all = Emotes.all();
+			for (int i = 0; i < Math.min(all.size(), EmoteWheelScreen.SLOTS); i++)
+				if (all.get(i).id().equals("wave"))
+					index = i;
+			int[] center = wheel.slotCenter(index);
+			return new int[] { center[0], center[1], (int) client.getWindow().getGuiScale() };
+		});
+		input.setCursorPos(slot[0] * slot[2], slot[1] * slot[2]);
+		context.waitTicks(4);
+		input.pressMouse(InputConstants.MOUSE_BUTTON_LEFT);
+		context.waitTicks(10);
+		check(Emotes.playing() != null && Emotes.playing().id().equals("wave"), "clicking a slot plays the emote");
+		check(context.computeOnClient(client -> client.options.getCameraType()) == CameraType.THIRD_PERSON_FRONT, "emotes show the player from the front");
+		context.takeScreenshot("emote-wave");
+		context.waitTicks(50);
+		check(Emotes.playing() == null, "a one time emote ends by itself");
+		check(context.computeOnClient(client -> client.options.getCameraType()) == CameraType.FIRST_PERSON, "the camera comes back after the emote");
+		context.runOnClient(client -> Emotes.play(client, Emotes.all().stream().filter(emote -> emote.id().equals("cheer")).findFirst().orElseThrow()));
+		context.waitTicks(10);
+		context.takeScreenshot("emote-cheer");
+		input.holdKey(options -> options.keyUp);
+		context.waitTicks(3);
+		input.releaseKey(options -> options.keyUp);
+		check(Emotes.playing() == null, "walking stops a looping emote");
 	}
 
 	private void testMenuSplash(ClientGameTestContext context) {
@@ -694,6 +841,9 @@ public class ZyroxClientTest implements FabricClientGameTest {
 		context.waitFor(client -> "red_party_hat".equals(CloudCosmetics.item(nearby, "hat")), 160);
 		check(Cosmetics.hat(nearby, false).id().equals("red_party_hat"), "the new hat replaces the old one");
 		context.runOnClient(client -> client.level.removeEntity(NEARBY_ENTITY, Entity.RemovalReason.DISCARDED));
+
+		testFriends(context);
+		testRoles(context);
 
 		CloudCosmetics.serverUrl = "http://127.0.0.1:9";
 		Cosmetics.hatId = "party_hat";

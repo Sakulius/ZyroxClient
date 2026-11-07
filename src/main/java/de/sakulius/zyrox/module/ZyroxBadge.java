@@ -2,6 +2,7 @@ package de.sakulius.zyrox.module;
 
 import de.sakulius.zyrox.ZyroxClient;
 import de.sakulius.zyrox.cloud.CloudCosmetics;
+import de.sakulius.zyrox.cloud.Roles;
 import java.util.UUID;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
@@ -16,12 +17,13 @@ public final class ZyroxBadge {
 	}
 
 	public static boolean shows(UUID player) {
-		return Modules.BADGE.enabled && (player.equals(Minecraft.getInstance().getUser().getProfileId()) || CloudCosmetics.usesZyrox(player));
+		return Modules.BADGE.enabled && (player.equals(Minecraft.getInstance().getUser().getProfileId()) || CloudCosmetics.usesZyrox(player) || Roles.of(player) != null);
 	}
 
 	public static Component decorate(UUID player, Component name) {
 		if (name == null || !shows(player))
 			return name;
-		return Component.empty().append(Component.literal("").withStyle(STYLE)).append(" ").append(name);
+		var role = Roles.of(player);
+		return Component.empty().append(Component.literal(role == null ? "\ue000" : role.glyph).withStyle(STYLE)).append(" ").append(name);
 	}
 }

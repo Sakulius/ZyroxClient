@@ -12,6 +12,7 @@
 		"LightmapMixin",
 		"LivingEntityRendererMixin",
 		"MouseHandlerMixin",
+		"PlayerModelMixin",
 		"PlayerTabOverlayMixin",
 		"SplashRendererAccessor",
 		"TitleScreenMixin",

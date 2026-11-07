@@ -2,6 +2,10 @@ package de.sakulius.zyrox;
 
 import com.mojang.blaze3d.platform.InputConstants;
 import de.sakulius.zyrox.cloud.CloudCosmetics;
+import de.sakulius.zyrox.cloud.Friends;
+import de.sakulius.zyrox.cloud.RoleCommand;
+import de.sakulius.zyrox.cloud.Roles;
+import de.sakulius.zyrox.emote.Emotes;
 import de.sakulius.zyrox.module.Cosmetics;
 import de.sakulius.zyrox.module.HudModule;
 import de.sakulius.zyrox.module.MenuSplash;
@@ -14,9 +18,11 @@ import de.sakulius.zyrox.music.MusicManager;
 import de.sakulius.zyrox.music.SkyLyrics;
 import de.sakulius.zyrox.music.WindowsMediaSession;
 import de.sakulius.zyrox.screen.PlayerPreviewRenderer;
-import de.sakulius.zyrox.screen.WaypointNameScreen;
+import de.sakulius.zyrox.screen.EmoteWheelScreen;
+import de.sakulius.zyrox.screen.NameScreen;
 import de.sakulius.zyrox.screen.ZyroxScreen;
 import net.fabricmc.api.ClientModInitializer;
+import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
 import net.fabricmc.fabric.api.client.rendering.v1.LivingEntityRenderLayerRegistrationCallback;
@@ -38,6 +44,7 @@ public class ZyroxClient implements ClientModInitializer {
 	public static KeyMapping nextKey;
 	public static KeyMapping previousKey;
 	public static KeyMapping waypointKey;
+	public static KeyMapping emoteKey;
 
 	private static boolean sprintHeld;
 
@@ -53,7 +60,9 @@ public class ZyroxClient implements ClientModInitializer {
 		nextKey = KeyMappingHelper.registerKeyMapping(new KeyMapping("key.zyrox.next", InputConstants.Type.KEYBOARD, InputConstants.UNKNOWN.getValue(), category));
 		previousKey = KeyMappingHelper.registerKeyMapping(new KeyMapping("key.zyrox.previous", InputConstants.Type.KEYBOARD, InputConstants.UNKNOWN.getValue(), category));
 		waypointKey = KeyMappingHelper.registerKeyMapping(new KeyMapping("key.zyrox.waypoint", InputConstants.Type.KEYBOARD, InputConstants.KEY_B, category));
+		ClientCommandRegistrationCallback.EVENT.register((dispatcher, context) -> RoleCommand.register(dispatcher));
 		PictureInPictureRendererRegistry.register(context -> new PlayerPreviewRenderer());
+		emoteKey = KeyMappingHelper.registerKeyMapping(new KeyMapping("key.zyrox.emote", InputConstants.Type.KEYBOARD, InputConstants.KEY_G, category));
 		MusicManager.start();
 		LevelRenderEvents.COLLECT_SUBMITS.register(SkyLyrics::render);
 
@@ -72,7 +81,13 @@ public class ZyroxClient implements ClientModInitializer {
 				client.gui.setScreen(new ZyroxScreen());
 			while (waypointKey.consumeClick())
 				if (Waypoints.canAdd(client))
-					client.gui.setScreen(new WaypointNameScreen(null, "New waypoint", Waypoints.nextName(client), name -> Waypoints.add(client, name)));
+					client.gui.setScreen(new NameScreen(null, "New waypoint", Waypoints.nextName(client), name -> Waypoints.add(client, name)));
+			while (emoteKey.consumeClick())
+				if (client.player != null && client.gui.screen() == null)
+					client.gui.setScreen(new EmoteWheelScreen());
+			Emotes.tick(client);
+			Friends.tick(client);
+			Roles.tick(client);
 			updateAutoSprint(client);
 			PvpTracker.tick(client);
 			Cosmetics.tick(client);
