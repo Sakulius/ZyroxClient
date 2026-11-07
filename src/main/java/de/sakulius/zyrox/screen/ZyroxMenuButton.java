@@ -1,12 +1,14 @@
 package de.sakulius.zyrox.screen;
 
 import de.sakulius.zyrox.ZyroxTheme;
+import java.util.function.Consumer;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.AbstractButton;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
 import net.minecraft.client.input.InputWithModifiers;
+import net.minecraft.network.chat.Component;
 
 public class ZyroxMenuButton extends AbstractButton {
 	private static final int BACK = 0x8C101116;
@@ -17,19 +19,25 @@ public class ZyroxMenuButton extends AbstractButton {
 	private static final float SLIDE = 4f;
 	private static final float SPEED = 16f;
 
-	private final Button original;
+	private final Consumer<InputWithModifiers> action;
+	private final boolean centered;
 	private long lastFrame = System.nanoTime();
 	private float hover;
 
 	public ZyroxMenuButton(Button original, int x, int y, int width, int height) {
-		super(x, y, width, height, original.getMessage());
-		this.original = original;
+		this(original.getMessage(), x, y, width, height, original::onPress, false);
 		this.active = original.active;
+	}
+
+	public ZyroxMenuButton(Component message, int x, int y, int width, int height, Consumer<InputWithModifiers> action, boolean centered) {
+		super(x, y, width, height, message);
+		this.action = action;
+		this.centered = centered;
 	}
 
 	@Override
 	public void onPress(InputWithModifiers input) {
-		original.onPress(input);
+		action.accept(input);
 	}
 
 	@Override
@@ -44,7 +52,9 @@ public class ZyroxMenuButton extends AbstractButton {
 		Draw.roundRect(graphics, left, getY(), getWidth(), getHeight(), RADIUS, Fx.alpha(Fx.mix(BACK, accent, hover), alpha));
 		Draw.outline(graphics, left, getY(), getWidth(), getHeight(), RADIUS, Fx.alpha(BORDER, alpha));
 		var font = Minecraft.getInstance().font;
-		Type.SEMIBOLD.draw(graphics, font, getMessage().getString(), Math.round(left) + 10, getY() + (getHeight() - 8) / 2, Fx.alpha(active ? TEXT : MUTED, alpha));
+		var label = getMessage().getString();
+		int textX = centered ? Math.round(left) + (getWidth() - Type.SEMIBOLD.width(font, label)) / 2 : Math.round(left) + 10;
+		Type.SEMIBOLD.draw(graphics, font, label, textX, getY() + (getHeight() - 8) / 2, Fx.alpha(active ? TEXT : MUTED, alpha));
 	}
 
 	@Override

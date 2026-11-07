@@ -1,7 +1,6 @@
 package de.sakulius.zyrox.module;
 
-import de.sakulius.zyrox.ZyroxTheme;
-import de.sakulius.zyrox.screen.Draw;
+import de.sakulius.zyrox.HudStyle;
 import de.sakulius.zyrox.screen.Type;
 import java.util.function.Function;
 import net.minecraft.client.Minecraft;
@@ -37,7 +36,7 @@ public class TextHudModule extends HudModule {
 
 	@Override
 	protected void render(GuiGraphicsExtractor graphics, Minecraft client, int left, int top) {
-		Draw.roundRect(graphics, left, top, contentWidth(client), HEIGHT, RADIUS, ZyroxTheme.HUD_BACKGROUND);
-		Type.REGULAR.draw(graphics, client.font, text.apply(client), left + PADDING_X, top + TEXT_Y, ZyroxTheme.hudText(left, top));
+		HudStyle.panel(graphics, left, top, contentWidth(client), HEIGHT);
+		HudStyle.text(graphics, client.font, text.apply(client), left + PADDING_X, top + TEXT_Y, left, top);
 	}
 }

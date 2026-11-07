@@ -1,6 +1,7 @@
 package de.sakulius.zyrox.screen;
 
 import com.mojang.blaze3d.platform.InputConstants;
+import de.sakulius.zyrox.HudStyle;
 import de.sakulius.zyrox.ZyroxClient;
 import de.sakulius.zyrox.ZyroxConfig;
 import de.sakulius.zyrox.ZyroxTheme;
@@ -97,6 +98,7 @@ public class ZyroxScreen extends Screen {
 	private static final int TILE_PREVIEW = 44;
 	private static final int TILE_GAP = 5;
 	private static final List<String> COSMETIC_TABS = List.of("Capes", "Hats", "Auras");
+	private static final List<String> HUD_TABS = List.of("Elements", "Style");
 	private static final int LYRICS_OFFSET_MS = 250;
 	private static final int WAYPOINT_BUTTONS = 66;
 	private static final int WAYPOINT_EDIT = 40;
@@ -116,6 +118,7 @@ public class ZyroxScreen extends Screen {
 
 	private static int cosmeticTab;
 	private static boolean legacyCapes;
+	private static int hudTab;
 
 	private final Map<String, Float> toggleAnim = new HashMap<>();
 	private final List<Page> pages;
@@ -150,6 +153,25 @@ public class ZyroxScreen extends Screen {
 	private int guideX = -1;
 	private int guideY = -1;
 
+	private Screen parent;
+	private PlayerPreviewWidget preview;
+
+	public static ZyroxScreen cosmeticsFrom(Screen parent) {
+		var screen = new ZyroxScreen();
+		screen.parent = parent;
+		for (int i = 0; i < screen.pages.size(); i++)
+			if (screen.pages.get(i).id().equals("cosmetics"))
+				screen.selected = i;
+		screen.position = screen.selected;
+		screen.panel = screen.pages.get(screen.selected);
+		screen.shownPanel = screen.panel;
+		return screen;
+	}
+
+	public boolean isFromTitle() {
+		return parent != null;
+	}
+
 	public ZyroxScreen() {
 		super(Component.literal("Zyrox Client"));
 		pages = List.of(
@@ -172,6 +194,12 @@ public class ZyroxScreen extends Screen {
 	protected void init() {
 		if (ZyroxTheme.cinematic && !editing && !isClosing)
 			CameraRig.setActive(true);
+		if (minecraft.level == null) {
+			int modelHeight = (int) (height * 0.58f);
+			int modelWidth = modelHeight * 3 / 4;
+			preview = new PlayerPreviewWidget((panelLeft() - modelWidth) / 2, (height - modelHeight) / 2, modelWidth, modelHeight);
+			addRenderableWidget(preview);
+		}
 	}
 
 	private void pill(GuiGraphicsExtractor graphics, int x, int y, float amount, int accent, float alpha) {
@@ -288,7 +316,11 @@ public class ZyroxScreen extends Screen {
 	private List<Row> hudRows() {
 		var rows = new ArrayList<Row>();
 		rows.add(button("edit", "Edit HUD layout", this::enterEdit));
-		rows.add(toggle("chroma-hud", "Chroma HUD", "Rainbow HUD elements", () -> ZyroxTheme.chromaHud, on -> ZyroxTheme.chromaHud = on));
+		rows.add(tabs("hud-tabs", HUD_TABS, () -> hudTab, index -> hudTab = index));
+		if (hudTab == 1) {
+			hudStyleRows(rows);
+			return rows;
+		}
 		var tiles = new ArrayList<Tile>();
 		for (var module : Modules.ALL)
 			if (module.category == Module.Category.HUD)
@@ -296,6 +328,83 @@ public class ZyroxScreen extends Screen {
 		rows.add(tileGrid(tiles));
 		rows.add(note("Click a tile to turn it on or off."));
 		return rows;
+	}
+
+	private void hudStyleRows(List<Row> rows) {
+		rows.add(stylePreview());
+		rows.add(select("hud-panels", "Panels", () -> HudStyle.PANEL_STYLES, () -> HudStyle.panelStyle, value -> HudStyle.panelStyle = value));
+		if (HudStyle.panelStyle == HudStyle.GLASS)
+			rows.add(select("hud-blur", "Blur", () -> HudStyle.BLURS, () -> HudStyle.blur, value -> HudStyle.blur = value));
+		if (HudStyle.panelStyle != HudStyle.NO_PANEL) {
+			rows.add(select("hud-opacity", "Panel opacity", () -> HudStyle.OPACITIES, () -> HudStyle.opacity, value -> HudStyle.opacity = value));
+			rows.add(colorRow("hud-tint", "Panel color", HudStyle.TINTS, () -> HudStyle.tint, value -> HudStyle.tint = value));
+			rows.add(select("hud-corners", "Corners", () -> HudStyle.CORNERS, () -> HudStyle.corners, value -> HudStyle.corners = value));
+			rows.add(toggle("hud-border", "Border", "Thin line around panels", () -> HudStyle.border, on -> HudStyle.border = on));
+			rows.add(toggle("hud-shadow", "Shadow", "Soft shadow behind panels", () -> HudStyle.shadow, on -> HudStyle.shadow = on));
+		}
+		rows.add(toggle("hud-two-tone", "Two-tone text", "Labels get their own color", () -> HudStyle.twoTone, on -> HudStyle.twoTone = on));
+		if (HudStyle.twoTone)
+			rows.add(colorRow("hud-label", "Label color", HudStyle.TEXT_COLORS, () -> HudStyle.labelColor, value -> HudStyle.labelColor = value));
+		rows.add(colorRow("hud-value", "Text color", HudStyle.TEXT_COLORS, () -> HudStyle.valueColor, value -> HudStyle.valueColor = value));
+		rows.add(toggle("chroma-hud", "Chroma HUD", "Rainbow HUD elements", () -> ZyroxTheme.chromaHud, on -> ZyroxTheme.chromaHud = on));
+		rows.add(toggle("hud-text-shadow", "Text shadow", "Easier to read on bright ground", () -> HudStyle.textShadow, on -> HudStyle.textShadow = on));
+		rows.add(select("hud-font", "Font", () -> HudStyle.FONTS, () -> HudStyle.font, value -> HudStyle.font = value));
+		rows.add(toggle("hud-scoreboard", "Scoreboard panel", "Sidebar in the HUD style", () -> HudStyle.scoreboard, on -> HudStyle.scoreboard = on));
+		rows.add(toggle("hud-hide-scores", "Hide score numbers", "Removes the red numbers", () -> HudStyle.hideScores, on -> HudStyle.hideScores = on));
+		rows.add(toggle("hud-hotbar", "Hotbar panel", "Hotbar in the HUD style", () -> HudStyle.hotbar, on -> HudStyle.hotbar = on));
+		rows.add(button("hud-reset", "Reset style", () -> {
+			HudStyle.reset();
+			ZyroxTheme.chromaHud = false;
+		}));
+	}
+
+	private Row stylePreview() {
+		return new Row("hud-preview", 34) {
+			@Override
+			void draw(GuiGraphicsExtractor graphics, int x, int y, int w, int mouseX, int mouseY, float alpha) {
+				HudStyle.begin();
+				int left = x + 8;
+				for (var text : List.of("FPS 573", "BPS 0.0")) {
+					int width = Type.REGULAR.width(font, text) + 10;
+					HudStyle.panel(graphics, left, y + 9, width, 15);
+					HudStyle.text(graphics, font, text, left + 5, y + 13, left, y + 9);
+					left += width + 6;
+				}
+				HudStyle.end();
+			}
+
+			@Override
+			void click(double mouseX, int x, int y, int w) {
+			}
+		};
+	}
+
+	private Row colorRow(String id, String name, List<HudStyle.Swatch> colors, IntSupplier get, IntConsumer set) {
+		return new Row(id, 40) {
+			@Override
+			void draw(GuiGraphicsExtractor graphics, int x, int y, int w, int mouseX, int mouseY, float alpha) {
+				var chosen = colors.get(Math.clamp(get.getAsInt(), 0, colors.size() - 1)).name();
+				Type.SEMIBOLD.draw(graphics, font, name, x + 8, y + 5, Fx.alpha(TEXT, alpha));
+				Type.REGULAR.draw(graphics, font, chosen, x + w - 8 - Type.REGULAR.width(font, chosen), y + 5, Fx.alpha(MUTED, alpha));
+				for (int i = 0; i < colors.size(); i++) {
+					int sx = x + 8 + i * (SWATCH + 6);
+					int sy = y + 19;
+					Draw.roundRect(graphics, sx, sy, SWATCH, SWATCH, SWATCH / 2f, Fx.alpha(HudStyle.swatchColor(colors, i) | 0xFF000000, alpha));
+					Draw.outline(graphics, sx, sy, SWATCH, SWATCH, SWATCH / 2f, Fx.alpha(0x30FFFFFF, alpha));
+					if (i == get.getAsInt())
+						Draw.outline(graphics, sx - 2, sy - 2, SWATCH + 4, SWATCH + 4, SWATCH / 2f + 2, Fx.alpha(TEXT, alpha));
+				}
+			}
+
+			@Override
+			void click(double mouseX, int x, int y, int w) {
+				int index = (int) (mouseX - x - 8) / (SWATCH + 6);
+				if (mouseX >= x + 8 && index < colors.size()) {
+					set.accept(index);
+					playClick(1.4f);
+				}
+			}
+		};
 	}
 
 	private Tile moduleTile(Module module, Identifier image, int imageSize) {
@@ -307,7 +416,7 @@ public class ZyroxScreen extends Screen {
 
 	private List<Row> cosmeticRows() {
 		var rows = new ArrayList<Row>();
-		rows.add(cosmeticTabs());
+		rows.add(tabs("tabs", COSMETIC_TABS, () -> cosmeticTab, index -> cosmeticTab = index));
 		if (cosmeticTab == 0) {
 			rows.add(button("legacy-capes", legacyCapes ? "Back to capes" : "Legacy capes", () -> {
 				legacyCapes = !legacyCapes;
@@ -329,27 +438,27 @@ public class ZyroxScreen extends Screen {
 		return rows;
 	}
 
-	private Row cosmeticTabs() {
-		return new Row("tabs", TAB_HEIGHT) {
+	private Row tabs(String id, List<String> labels, IntSupplier get, IntConsumer set) {
+		return new Row(id, TAB_HEIGHT) {
 			@Override
 			void draw(GuiGraphicsExtractor graphics, int x, int y, int w, int mouseX, int mouseY, float alpha) {
-				for (int i = 0; i < COSMETIC_TABS.size(); i++) {
-					int tabX = cosmeticTabX(x, w, i);
-					int tabWidth = cosmeticTabWidth(w);
+				for (int i = 0; i < labels.size(); i++) {
+					int tabX = tabX(x, w, labels.size(), i);
+					int tabWidth = tabWidth(w, labels.size());
 					boolean hovered = inside(mouseX, mouseY, tabX, y, tabWidth, height);
-					if (i == cosmeticTab)
+					if (i == get.getAsInt())
 						Draw.roundRect(graphics, tabX, y, tabWidth, height, ROW_RADIUS, Fx.alpha(ZyroxTheme.accent(), alpha));
 					else if (hovered)
 						Draw.roundRect(graphics, tabX, y, tabWidth, height, ROW_RADIUS, Fx.alpha(HOVER, alpha));
-					Type.SEMIBOLD.centered(graphics, font, COSMETIC_TABS.get(i), tabX + tabWidth / 2, y + (height - 8) / 2, Fx.alpha(i == cosmeticTab || hovered ? TEXT : MUTED, alpha));
+					Type.SEMIBOLD.centered(graphics, font, labels.get(i), tabX + tabWidth / 2, y + (height - 8) / 2, Fx.alpha(i == get.getAsInt() || hovered ? TEXT : MUTED, alpha));
 				}
 			}
 
 			@Override
 			void click(double mouseX, int x, int y, int w) {
-				for (int i = 0; i < COSMETIC_TABS.size(); i++) {
-					if (mouseX >= cosmeticTabX(x, w, i) && mouseX < cosmeticTabX(x, w, i) + cosmeticTabWidth(w)) {
-						cosmeticTab = i;
+				for (int i = 0; i < labels.size(); i++) {
+					if (mouseX >= tabX(x, w, labels.size(), i) && mouseX < tabX(x, w, labels.size(), i) + tabWidth(w, labels.size())) {
+						set.accept(i);
 						panelScroll = 0;
 						panelScrollTarget = 0;
 						playClick(1.3f);
@@ -360,12 +469,12 @@ public class ZyroxScreen extends Screen {
 		};
 	}
 
-	private int cosmeticTabWidth(int w) {
-		return (w - 16 - TILE_GAP * (COSMETIC_TABS.size() - 1)) / COSMETIC_TABS.size();
+	private int tabWidth(int w, int count) {
+		return (w - 16 - TILE_GAP * (count - 1)) / count;
 	}
 
-	private int cosmeticTabX(int x, int w, int index) {
-		return x + 8 + index * (cosmeticTabWidth(w) + TILE_GAP);
+	private int tabX(int x, int w, int count, int index) {
+		return x + 8 + index * (tabWidth(w, count) + TILE_GAP);
 	}
 
 	private List<Tile> capeTiles(List<Cosmetics.Cape> capes) {
@@ -764,7 +873,13 @@ public class ZyroxScreen extends Screen {
 	public int[] cosmeticTabCenter(int index) {
 		int x = panelLeft() + 6;
 		int w = panelRight() - panelLeft() - 14;
-		return new int[] { cosmeticTabX(x, w, index) + cosmeticTabWidth(w) / 2, rowCenter("tabs")[1] };
+		return new int[] { tabX(x, w, COSMETIC_TABS.size(), index) + tabWidth(w, COSMETIC_TABS.size()) / 2, rowCenter("tabs")[1] };
+	}
+
+	public int[] hudTabCenter(int index) {
+		int x = panelLeft() + 6;
+		int w = panelRight() - panelLeft() - 14;
+		return new int[] { tabX(x, w, HUD_TABS.size(), index) + tabWidth(w, HUD_TABS.size()) / 2, rowCenter("hud-tabs")[1] };
 	}
 
 	public int[] tileCenter(int index) {
@@ -793,6 +908,8 @@ public class ZyroxScreen extends Screen {
 
 	@Override
 	public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
+		if (minecraft.level == null)
+			super.extractBackground(graphics, mouseX, mouseY, delta);
 		long now = System.nanoTime();
 		dt = Math.min((now - lastFrame) / 1_000_000_000f, 0.1f);
 		lastFrame = now;
@@ -801,7 +918,10 @@ public class ZyroxScreen extends Screen {
 		if (isClosing) {
 			closing = Math.min(1f, closing + dt * CLOSE_SPEED);
 			if (closing >= 1f && minecraft.gui.screen() == this) {
-				super.onClose();
+				if (parent != null)
+					minecraft.gui.setScreen(parent);
+				else
+					super.onClose();
 				return;
 			}
 		}
@@ -860,6 +980,8 @@ public class ZyroxScreen extends Screen {
 		float fade = Fx.easeOutCubic(open) * (1 - closing) * (1 - editAmount);
 		if (fade < 0.02f)
 			return;
+		if (preview != null)
+			preview.extractRenderState(graphics, mouseX, mouseY, delta);
 		int menuX = editing ? -1000 : mouseX;
 		int menuY = editing ? -1000 : mouseY;
 		float carouselAlpha = fade * (1 - panelAmount);
@@ -1043,6 +1165,10 @@ public class ZyroxScreen extends Screen {
 	}
 
 	private void closePanel() {
+		if (parent != null) {
+			onClose();
+			return;
+		}
 		panel = null;
 		CameraRig.setOrbit(0f);
 		playClick(0.9f);

@@ -1,7 +1,7 @@
 package de.sakulius.zyrox.module;
 
+import de.sakulius.zyrox.HudStyle;
 import de.sakulius.zyrox.ZyroxTheme;
-import de.sakulius.zyrox.screen.Draw;
 import de.sakulius.zyrox.screen.Type;
 import java.util.ArrayList;
 import java.util.List;
@@ -80,7 +80,7 @@ public class ItemCounterModule extends HudModule {
 		var lines = lines(client);
 		if (lines.isEmpty())
 			return;
-		Draw.roundRect(graphics, left, top, contentWidth(client), HEIGHT, RADIUS, ZyroxTheme.HUD_BACKGROUND);
+		HudStyle.panel(graphics, left, top, contentWidth(client), HEIGHT);
 		int x = left + PADDING;
 		for (var line : lines) {
 			graphics.fakeItem(line.icon(), x, top + 1);

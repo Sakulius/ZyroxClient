@@ -4,6 +4,7 @@ import com.mojang.authlib.GameProfile;
 import com.mojang.blaze3d.platform.InputConstants;
 import com.sun.net.httpserver.HttpServer;
 import de.sakulius.zyrox.ZyroxClient;
+import de.sakulius.zyrox.HudStyle;
 import de.sakulius.zyrox.ZyroxConfig;
 import de.sakulius.zyrox.ZyroxTheme;
 import de.sakulius.zyrox.cloud.CloudCosmetics;
@@ -15,9 +16,14 @@ import de.sakulius.zyrox.module.Modules;
 import de.sakulius.zyrox.music.Lyrics;
 import de.sakulius.zyrox.music.MusicManager;
 import de.sakulius.zyrox.music.WindowsMediaSession;
+import de.sakulius.zyrox.module.News;
 import de.sakulius.zyrox.module.PvpTracker;
 import de.sakulius.zyrox.module.TntTimer;
 import de.sakulius.zyrox.module.Waypoints;
+import de.sakulius.zyrox.screen.Glass;
+import de.sakulius.zyrox.screen.NewsCard;
+import de.sakulius.zyrox.screen.NewsScreen;
+import de.sakulius.zyrox.screen.PlayerPreviewWidget;
 import de.sakulius.zyrox.screen.WaypointNameScreen;
 import de.sakulius.zyrox.screen.ZyroxMenuButton;
 import de.sakulius.zyrox.screen.ZyroxScreen;
@@ -85,6 +91,7 @@ public class ZyroxClientTest implements FabricClientGameTest {
 			testBadge(context);
 			testTntTimer(context, server);
 			testPvpModules(context, server);
+			testHudStyle(context, server);
 			scale = context.computeOnClient(client -> (double) client.getWindow().getGuiScale());
 			server.runCommand("effect give @a speed 300 1");
 			server.runCommand("item replace entity @a armor.chest with iron_chestplate");
@@ -136,6 +143,24 @@ public class ZyroxClientTest implements FabricClientGameTest {
 			context.takeScreenshot("zyrox-hud-grid-lower");
 			input.scroll(6);
 			context.waitTicks(15);
+			clickOn(screen -> screen.hudTabCenter(1));
+			context.waitTicks(10);
+			context.takeScreenshot("zyrox-hud-style");
+			input.scroll(-4);
+			context.waitTicks(15);
+			context.takeScreenshot("zyrox-hud-style-lower");
+			input.scroll(4);
+			context.waitTicks(15);
+			for (int corners = 0; corners < HudStyle.CORNERS.size(); corners++) {
+				HudStyle.corners = corners;
+				context.waitTick();
+			}
+			HudStyle.corners = 2;
+			clickOn(screen -> screen.rowCenterAt("hud-panels", 0.9f));
+			check(HudStyle.panelStyle == HudStyle.SOLID, "the arrow changes the panels, now " + HudStyle.panelStyle);
+			HudStyle.panelStyle = HudStyle.GLASS;
+			clickOn(screen -> screen.hudTabCenter(0));
+			context.waitTicks(10);
 
 			clickOn(screen -> screen.rowCenter("edit"));
 			check(screen().isEditing(), "the button opens edit mode");
@@ -377,7 +402,7 @@ public class ZyroxClientTest implements FabricClientGameTest {
 		server.runCommand("item replace entity @a armor.feet with iron_boots[damage=190]");
 		context.waitTicks(10);
 		context.getInput().pressMouse(InputConstants.MOUSE_BUTTON_LEFT);
-		context.waitTicks(4);
+		context.waitTicks(14);
 		check(PvpTracker.combo() == 1, "a landed hit counts for the combo, got " + PvpTracker.combo());
 		check(PvpTracker.reach() > 0.5f && PvpTracker.reach() < 3.5f, "the reach is measured, got " + PvpTracker.reach());
 		var counter = (HudModule) find("block_counter");
@@ -400,6 +425,57 @@ public class ZyroxClientTest implements FabricClientGameTest {
 		context.waitTicks(4);
 	}
 
+	private void testHudStyle(ClientGameTestContext context, net.fabricmc.fabric.api.client.gametest.v1.context.TestServerContext server) {
+		server.runCommand("scoreboard objectives add zyroxtest dummy \"EU Practice\"");
+		server.runCommand("scoreboard objectives setdisplay sidebar zyroxtest");
+		server.runCommand("scoreboard players set Wins zyroxtest 3");
+		server.runCommand("scoreboard players set Streak zyroxtest 2");
+		server.runCommand("scoreboard players set Online zyroxtest 1");
+		server.runCommand("item replace entity @a weapon.offhand with shield");
+		server.runCommand("execute at @a run fill ^-1 ^2 ^2 ^1 ^3 ^2 minecraft:gold_block");
+		server.runCommand("execute at @a run fill ^-6 ^ ^3 ^6 ^3 ^3 minecraft:lime_wool");
+		boolean nowPlaying = Modules.NOW_PLAYING.enabled;
+		Modules.NOW_PLAYING.enabled = false;
+		HudStyle.reset();
+		context.waitTicks(200);
+		context.takeScreenshot("style-glass");
+		check(context.computeOnClient(client -> Glass.isReady()), "the blur is ready");
+		for (int style = 0; style < HudStyle.PANEL_STYLES.size(); style++) {
+			for (int corners = 0; corners < HudStyle.CORNERS.size(); corners++) {
+				HudStyle.panelStyle = style;
+				HudStyle.corners = corners;
+				HudStyle.border = true;
+				HudStyle.shadow = true;
+				context.waitTick();
+			}
+		}
+		HudStyle.reset();
+		HudStyle.hideScores = true;
+		HudStyle.tint = 2;
+		HudStyle.corners = 4;
+		HudStyle.font = 1;
+		HudStyle.textShadow = true;
+		HudStyle.blur = 2;
+		context.waitTicks(4);
+		context.takeScreenshot("style-custom");
+		HudStyle.reset();
+		HudStyle.panelStyle = HudStyle.SOLID;
+		context.waitTicks(4);
+		context.takeScreenshot("style-solid");
+		HudStyle.reset();
+		HudStyle.scoreboard = false;
+		HudStyle.hotbar = false;
+		context.waitTicks(4);
+		context.takeScreenshot("style-vanilla-bars");
+		HudStyle.reset();
+		Modules.NOW_PLAYING.enabled = nowPlaying;
+		server.runCommand("scoreboard objectives remove zyroxtest");
+		server.runCommand("item replace entity @a weapon.offhand with air");
+		server.runCommand("execute at @a run fill ^-6 ^ ^3 ^6 ^3 ^3 minecraft:air");
+		server.runCommand("execute at @a run fill ^-1 ^2 ^2 ^1 ^3 ^2 minecraft:air");
+		context.waitTicks(2);
+	}
+
 	private void testMenuSplash(ClientGameTestContext context) {
 		context.waitForScreen(TitleScreen.class);
 		var gist = new AtomicReference<>("Hello from the web");
@@ -418,10 +494,87 @@ public class ZyroxClientTest implements FabricClientGameTest {
 		});
 		web.start();
 		MenuSplash.url = "http://127.0.0.1:" + web.getAddress().getPort() + "/";
+		byte[] newsPicture;
+		try (var stream = ZyroxClientTest.class.getResourceAsStream("/assets/zyrox/textures/gui/logo.png")) {
+			newsPicture = stream.readAllBytes();
+		} catch (IOException e) {
+			throw new AssertionError("the test picture is missing", e);
+		}
+		var newsBody = "{\"title\":\"Glass HUD is here\",\"date\":\"2026-11-07\",\"image\":\"http://127.0.0.1:" + web.getAddress().getPort() + "/news.png\",\"changelog\":[\"# New\",\"- Frosted glass behind the HUD, scoreboard and hotbar\",\"- News on the main menu, this is a really long line that has to wrap onto a second line inside the frame\",\"\",\"# Fixes\",\"- Sharp corners no longer crash the game\",\"- A\",\"- B\",\"- C\",\"- D\",\"- E\",\"- F\",\"- G\",\"- H\",\"- I\",\"- J\",\"- K\"]}";
+		web.createContext("/news.json", exchange -> {
+			var body = newsBody.getBytes(StandardCharsets.UTF_8);
+			exchange.sendResponseHeaders(200, body.length);
+			try (var out = exchange.getResponseBody()) {
+				out.write(body);
+			}
+		});
+		web.createContext("/news.png", exchange -> {
+			exchange.sendResponseHeaders(200, newsPicture.length);
+			try (var out = exchange.getResponseBody()) {
+				out.write(newsPicture);
+			}
+		});
+		News.url = "http://127.0.0.1:" + web.getAddress().getPort() + "/news.json";
+		News.refreshSoon();
+		context.waitFor(client -> News.item() != null && News.item().title().equals("Glass HUD is here") && News.picture() != null, 200);
+		check(News.item().title().equals("Glass HUD is here"), "the news title comes from the gist, got " + News.item().title());
 		MenuSplash.refreshSoon();
 		context.waitFor(client -> MenuSplash.text().equals("Hello from the web"), 100);
 		context.waitTicks(40);
 		context.takeScreenshot("splash-web");
+		int[] card = context.computeOnClient(client -> {
+			for (var child : client.gui.screen().children())
+				if (child instanceof NewsCard news)
+					return new int[] { news.getX() + news.getWidth() / 2, news.getY() + news.getHeight() / 2, (int) client.getWindow().getGuiScale() };
+			throw new AssertionError("the main menu has no news card");
+		});
+		context.getInput().setCursorPos(card[0] * card[2], card[1] * card[2]);
+		context.waitTick();
+		context.getInput().pressMouse(InputConstants.MOUSE_BUTTON_LEFT);
+		context.waitTicks(10);
+		check(context.computeOnClient(client -> client.gui.screen() instanceof NewsScreen), "clicking the news opens the changelog");
+		context.takeScreenshot("news-changelog");
+		context.getInput().scroll(-10);
+		context.waitTicks(15);
+		context.takeScreenshot("news-changelog-scrolled");
+		context.getInput().pressKey(InputConstants.KEY_ESCAPE);
+		context.waitForScreen(TitleScreen.class);
+		int[] cosmetics = context.computeOnClient(client -> {
+			for (var child : client.gui.screen().children())
+				if (child instanceof ZyroxMenuButton button && button.getMessage().getString().equals("Cosmetics"))
+					return new int[] { button.getX() + button.getWidth() / 2, button.getY() + button.getHeight() / 2, (int) client.getWindow().getGuiScale() };
+			throw new AssertionError("the main menu has no cosmetics button");
+		});
+		check(context.computeOnClient(client -> client.gui.screen().children().stream().anyMatch(child -> child instanceof PlayerPreviewWidget)), "the main menu shows the player");
+		Cosmetics.hatId = "party_hat";
+		Cosmetics.capeId = "nebula";
+		context.waitTicks(4);
+		context.takeScreenshot("title-player");
+		int[] model = context.computeOnClient(client -> {
+			for (var child : client.gui.screen().children())
+				if (child instanceof PlayerPreviewWidget widget)
+					return new int[] { widget.getX() + widget.getWidth() / 2, widget.getY() + widget.getHeight() / 2, (int) client.getWindow().getGuiScale() };
+			throw new AssertionError("no player preview");
+		});
+		context.getInput().setCursorPos(model[0] * model[2], model[1] * model[2]);
+		context.waitTick();
+		context.getInput().holdMouse(InputConstants.MOUSE_BUTTON_LEFT);
+		context.waitTick();
+		context.getInput().moveCursor(60 * model[2], 0);
+		context.waitTick();
+		context.getInput().releaseMouse(InputConstants.MOUSE_BUTTON_LEFT);
+		context.waitTicks(4);
+		context.takeScreenshot("title-player-back");
+		context.getInput().setCursorPos(cosmetics[0] * cosmetics[2], cosmetics[1] * cosmetics[2]);
+		context.waitTick();
+		context.getInput().pressMouse(InputConstants.MOUSE_BUTTON_LEFT);
+		context.waitTicks(25);
+		check(context.computeOnClient(client -> client.gui.screen() instanceof ZyroxScreen screen && screen.isFromTitle() && screen.isPanelOpen()), "the cosmetics button opens the cosmetics");
+		context.takeScreenshot("title-cosmetics");
+		context.getInput().pressKey(InputConstants.KEY_ESCAPE);
+		context.waitForScreen(TitleScreen.class);
+		Cosmetics.hatId = Cosmetics.NOTHING;
+		Cosmetics.capeId = Cosmetics.DEFAULT_CAPE;
 		int[] options = context.computeOnClient(client -> {
 			for (var child : client.gui.screen().children())
 				if (child instanceof ZyroxMenuButton button && button.getMessage().getString().startsWith("Options"))

@@ -19,8 +19,6 @@ public final class ZyroxTheme {
 
 	private static final int CHROMA_INDEX = CHOICES.size() - 1;
 	private static final float CHROMA_SPEED = 0.12f;
-	private static final int HUD_TEXT = 0xFFFFFFFF;
-	public static final int HUD_BACKGROUND = 0x9A101116;
 
 	public static int index;
 	public static boolean chromaHud;
@@ -54,6 +52,6 @@ public final class ZyroxTheme {
 	}
 
 	public static int hudText(int x, int y) {
-		return chromaHud ? chroma((x + y) * 0.003f) : HUD_TEXT;
+		return chromaHud ? chroma((x + y) * 0.003f) : HudStyle.value();
 	}
 }

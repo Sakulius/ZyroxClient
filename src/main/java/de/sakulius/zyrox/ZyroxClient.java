@@ -6,18 +6,21 @@ import de.sakulius.zyrox.module.Cosmetics;
 import de.sakulius.zyrox.module.HudModule;
 import de.sakulius.zyrox.module.MenuSplash;
 import de.sakulius.zyrox.module.Modules;
+import de.sakulius.zyrox.module.News;
 import de.sakulius.zyrox.module.PvpTracker;
 import de.sakulius.zyrox.module.Waypoints;
 import de.sakulius.zyrox.module.WearableLayer;
 import de.sakulius.zyrox.music.MusicManager;
 import de.sakulius.zyrox.music.SkyLyrics;
 import de.sakulius.zyrox.music.WindowsMediaSession;
+import de.sakulius.zyrox.screen.PlayerPreviewRenderer;
 import de.sakulius.zyrox.screen.WaypointNameScreen;
 import de.sakulius.zyrox.screen.ZyroxScreen;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
 import net.fabricmc.fabric.api.client.rendering.v1.LivingEntityRenderLayerRegistrationCallback;
+import net.fabricmc.fabric.api.client.rendering.v1.PictureInPictureRendererRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderEvents;
 import net.fabricmc.fabric.api.event.player.AttackEntityCallback;
@@ -50,6 +53,7 @@ public class ZyroxClient implements ClientModInitializer {
 		nextKey = KeyMappingHelper.registerKeyMapping(new KeyMapping("key.zyrox.next", InputConstants.Type.KEYBOARD, InputConstants.UNKNOWN.getValue(), category));
 		previousKey = KeyMappingHelper.registerKeyMapping(new KeyMapping("key.zyrox.previous", InputConstants.Type.KEYBOARD, InputConstants.UNKNOWN.getValue(), category));
 		waypointKey = KeyMappingHelper.registerKeyMapping(new KeyMapping("key.zyrox.waypoint", InputConstants.Type.KEYBOARD, InputConstants.KEY_B, category));
+		PictureInPictureRendererRegistry.register(context -> new PlayerPreviewRenderer());
 		MusicManager.start();
 		LevelRenderEvents.COLLECT_SUBMITS.register(SkyLyrics::render);
 
@@ -57,6 +61,7 @@ public class ZyroxClient implements ClientModInitializer {
 
 		ClientTickEvents.END_CLIENT_TICK.register(client -> {
 			MenuSplash.tick(client);
+			News.tick(client);
 			while (playPauseKey.consumeClick())
 				MusicManager.send(WindowsMediaSession.Control.TOGGLE);
 			while (nextKey.consumeClick())

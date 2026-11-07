@@ -1,5 +1,6 @@
 package de.sakulius.zyrox.screen;
 
+import de.sakulius.zyrox.HudStyle;
 import de.sakulius.zyrox.ZyroxClient;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -25,6 +26,8 @@ public enum Type {
 	}
 
 	public Component of(String text) {
+		if (HudStyle.usesMinecraftFont())
+			return Component.literal(text);
 		int scale = Math.clamp(Draw.scale(), 1, MAX_SCALE);
 		return Component.literal(text).withStyle(styles[scale - 1]);
 	}
@@ -34,7 +37,7 @@ public enum Type {
 	}
 
 	public void draw(GuiGraphicsExtractor graphics, Font font, String text, int x, int y, int color) {
-		graphics.text(font, of(text), x, y, color, false);
+		graphics.text(font, of(text), x, y, color, HudStyle.usesTextShadow());
 	}
 
 	public void centered(GuiGraphicsExtractor graphics, Font font, String text, int x, int y, int color) {

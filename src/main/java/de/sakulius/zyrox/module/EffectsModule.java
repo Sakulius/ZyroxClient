@@ -1,7 +1,7 @@
 package de.sakulius.zyrox.module;
 
+import de.sakulius.zyrox.HudStyle;
 import de.sakulius.zyrox.ZyroxTheme;
-import de.sakulius.zyrox.screen.Draw;
 import de.sakulius.zyrox.screen.Type;
 import java.util.ArrayList;
 import java.util.List;
@@ -59,7 +59,7 @@ public class EffectsModule extends HudModule {
 		if (lines.isEmpty())
 			return;
 		int bottom = top + contentHeight(client);
-		Draw.roundRect(graphics, left, top, contentWidth(client), bottom - top, RADIUS, ZyroxTheme.HUD_BACKGROUND);
+		HudStyle.panel(graphics, left, top, contentWidth(client), bottom - top);
 		for (int i = 0; i < lines.size(); i++)
 			Type.REGULAR.draw(graphics, client.font, lines.get(i), left + PADDING, top + PADDING + i * (client.font.lineHeight + 1), ZyroxTheme.hudText(left, top + i * 10));
 	}

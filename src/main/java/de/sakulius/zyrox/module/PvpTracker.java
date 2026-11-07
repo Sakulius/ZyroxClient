@@ -10,7 +10,7 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.Vec3;
 
 public final class PvpTracker {
-	private static final int CONFIRM_TICKS = 6;
+	private static final int CONFIRM_TICKS = 12;
 	private static final int COMBO_TICKS = 60;
 	private static final int REACH_TICKS = 100;
 

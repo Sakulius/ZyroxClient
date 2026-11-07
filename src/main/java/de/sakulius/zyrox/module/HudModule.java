@@ -1,5 +1,6 @@
 package de.sakulius.zyrox.module;
 
+import de.sakulius.zyrox.HudStyle;
 import de.sakulius.zyrox.screen.Draw;
 import de.sakulius.zyrox.screen.ZyroxScreen;
 import net.minecraft.client.Minecraft;
@@ -36,14 +37,18 @@ public abstract class HudModule extends Module {
 
 	public final int width(Minecraft client) {
 		Draw.elementScale = scale;
+		HudStyle.begin();
 		int width = Math.round(contentWidth(client) * scale);
+		HudStyle.end();
 		Draw.elementScale = 1f;
 		return width;
 	}
 
 	public final int height(Minecraft client) {
 		Draw.elementScale = scale;
+		HudStyle.begin();
 		int height = Math.round(contentHeight(client) * scale);
+		HudStyle.end();
 		Draw.elementScale = 1f;
 		return height;
 	}
@@ -57,7 +62,9 @@ public abstract class HudModule extends Module {
 		pose.scale(scale, scale);
 		pose.translate(-left, -top);
 		Draw.elementScale = scale;
+		HudStyle.begin();
 		render(graphics, client, left, top);
+		HudStyle.end();
 		Draw.elementScale = 1f;
 		pose.popMatrix();
 	}

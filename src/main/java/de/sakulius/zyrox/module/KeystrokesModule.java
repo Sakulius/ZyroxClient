@@ -1,5 +1,6 @@
 package de.sakulius.zyrox.module;
 
+import de.sakulius.zyrox.HudStyle;
 import de.sakulius.zyrox.ZyroxTheme;
 import de.sakulius.zyrox.screen.Draw;
 import de.sakulius.zyrox.screen.Type;
@@ -45,7 +46,9 @@ public class KeystrokesModule extends HudModule {
 	}
 
 	private static void key(GuiGraphicsExtractor graphics, Minecraft client, KeyMapping mapping, String label, int x, int y, int width, int height) {
-		Draw.roundRect(graphics, x, y, width, height, RADIUS, mapping.isDown() ? ZyroxTheme.hudAccent(x, y) : ZyroxTheme.HUD_BACKGROUND);
+		HudStyle.panel(graphics, x, y, width, height);
+		if (mapping.isDown())
+			Draw.roundRect(graphics, x, y, width, height, HudStyle.radius(), ZyroxTheme.hudAccent(x, y));
 		Type.REGULAR.centered(graphics, client.font, label, x + width / 2, y + (height - client.font.lineHeight) / 2 + 1, TEXT);
 	}
 }

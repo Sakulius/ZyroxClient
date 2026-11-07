@@ -111,7 +111,8 @@ public final class Draw {
 		graphics.fill(px + r, py + ph - t, px + pw - r, py + ph, color);
 		graphics.fill(px, py + r, px + t, py + ph - r, color);
 		graphics.fill(px + pw - t, py + r, px + pw, py + ph - r, color);
-		quarters(graphics, ring(r, t), px, py, pw, ph, r, color);
+		if (r > 0)
+			quarters(graphics, ring(r, t), px, py, pw, ph, r, color);
 		pose.popMatrix();
 	}
 

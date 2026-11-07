@@ -1,5 +1,6 @@
 package de.sakulius.zyrox.module;
 
+import de.sakulius.zyrox.HudStyle;
 import de.sakulius.zyrox.ZyroxTheme;
 import de.sakulius.zyrox.music.MusicManager;
 import de.sakulius.zyrox.screen.Draw;
@@ -39,7 +40,7 @@ public class NowPlayingModule extends HudModule {
 		var track = MusicManager.track();
 		if (track == null && !editing(client))
 			return;
-		Draw.roundRect(graphics, left, top, WIDTH, HEIGHT, RADIUS, ZyroxTheme.HUD_BACKGROUND);
+		HudStyle.panel(graphics, left, top, WIDTH, HEIGHT);
 		var font = client.font;
 		int available = WIDTH - PADDING * 2;
 		if (track == null) {

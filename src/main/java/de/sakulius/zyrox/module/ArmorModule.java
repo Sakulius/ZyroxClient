@@ -1,7 +1,6 @@
 package de.sakulius.zyrox.module;
 
-import de.sakulius.zyrox.ZyroxTheme;
-import de.sakulius.zyrox.screen.Draw;
+import de.sakulius.zyrox.HudStyle;
 import de.sakulius.zyrox.screen.Fx;
 import de.sakulius.zyrox.screen.Type;
 import net.minecraft.client.Minecraft;
@@ -42,7 +41,7 @@ public class ArmorModule extends HudModule {
 		if (!any && !editing(client))
 			return;
 
-		Draw.roundRect(graphics, left, top, WIDTH, contentHeight(client), RADIUS, ZyroxTheme.HUD_BACKGROUND);
+		HudStyle.panel(graphics, left, top, WIDTH, contentHeight(client));
 		for (int i = 0; i < SLOTS.length; i++) {
 			var stack = player.getItemBySlot(SLOTS[i]);
 			if (stack.isEmpty())

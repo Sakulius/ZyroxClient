@@ -17,6 +17,14 @@ public final class ZyroxTitle {
 	public static final int BUTTON_STEP = 24;
 	public static final int HEADER_HEIGHT = 52;
 	public static final int ICON_STEP = 24;
+	public static final float NEWS_SHARE = 0.27f;
+	public static final int NEWS_MIN_WIDTH = 150;
+	public static final int NEWS_MAX_WIDTH = 240;
+	public static final int SIDE_MARGIN = 12;
+	public static final int SIDE_GAP = 6;
+	public static final int MODEL_BOTTOM = 16;
+	public static final int MODEL_MIN_HEIGHT = 60;
+	public static final float MODEL_SHARE = 0.48f;
 
 	private static final Identifier LOGO = Identifier.fromNamespaceAndPath(ZyroxClient.MOD_ID, "textures/gui/logo.png");
 	private static final int LOGO_TEXTURE_WIDTH = 565;

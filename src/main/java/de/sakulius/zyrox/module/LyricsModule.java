@@ -1,5 +1,6 @@
 package de.sakulius.zyrox.module;
 
+import de.sakulius.zyrox.HudStyle;
 import de.sakulius.zyrox.ZyroxTheme;
 import de.sakulius.zyrox.music.Lyrics;
 import de.sakulius.zyrox.music.MusicManager;
@@ -52,7 +53,7 @@ public class LyricsModule extends HudModule {
 
 		if (MusicManager.skyLyrics) {
 			if (editing(client)) {
-				Draw.roundRect(graphics, left, top + HEIGHT / 2f - 10, WIDTH, 20, RADIUS, ZyroxTheme.HUD_BACKGROUND);
+				HudStyle.panel(graphics, left, top + HEIGHT / 2f - 10, WIDTH, 20);
 				Type.REGULAR.centered(graphics, client.font, "Lyrics are floating in the sky", left + WIDTH / 2, top + HEIGHT / 2 - 4, MUTED);
 			}
 			return;
@@ -69,7 +70,7 @@ public class LyricsModule extends HudModule {
 			message = "No synced lyrics for this song";
 		}
 		if (message != null) {
-			Draw.roundRect(graphics, left, top + HEIGHT / 2f - 10, WIDTH, 20, RADIUS, ZyroxTheme.HUD_BACKGROUND);
+			HudStyle.panel(graphics, left, top + HEIGHT / 2f - 10, WIDTH, 20);
 			Type.REGULAR.centered(graphics, client.font, message, left + WIDTH / 2, top + HEIGHT / 2 - 4, MUTED);
 			return;
 		}
@@ -86,7 +87,7 @@ public class LyricsModule extends HudModule {
 		scroll = Fx.approach(scroll, index, dt, SCROLL_SPEED);
 		float alpha = track.playing() ? 1f : PAUSED_ALPHA;
 
-		Draw.roundRect(graphics, left, top, WIDTH, HEIGHT, RADIUS, Fx.alpha(ZyroxTheme.HUD_BACKGROUND, alpha));
+		HudStyle.panel(graphics, left, top, WIDTH, HEIGHT, alpha);
 		graphics.enableScissor(left, top + 1, left + WIDTH, top + HEIGHT - 1);
 		int first = (int) Math.floor(scroll) - 1;
 		for (int i = first; i <= first + 3; i++) {
