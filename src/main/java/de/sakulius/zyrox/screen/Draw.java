@@ -5,7 +5,7 @@ import de.sakulius.zyrox.ZyroxClient;
 import java.util.HashMap;
 import java.util.Map;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.resources.Identifier;
@@ -65,7 +65,7 @@ public final class Draw {
 		});
 	}
 
-	private static void quarters(GuiGraphicsExtractor graphics, Identifier texture, int x, int y, int w, int h, int r, int color) {
+	private static void quarters(GuiGraphics graphics, Identifier texture, int x, int y, int w, int h, int r, int color) {
 		int size = r * 2;
 		blit(graphics, texture, x, y, 0, 0, r, r, r, r, size, color);
 		blit(graphics, texture, x + w - r, y, r, 0, r, r, r, r, size, color);
@@ -73,11 +73,11 @@ public final class Draw {
 		blit(graphics, texture, x + w - r, y + h - r, r, r, r, r, r, r, size, color);
 	}
 
-	private static void blit(GuiGraphicsExtractor graphics, Identifier texture, int x, int y, int u, int v, int w, int h, int regionW, int regionH, int size, int color) {
+	private static void blit(GuiGraphics graphics, Identifier texture, int x, int y, int u, int v, int w, int h, int regionW, int regionH, int size, int color) {
 		graphics.blit(RenderPipelines.GUI_TEXTURED, texture, x, y, u, v, w, h, regionW, regionH, size, size, color);
 	}
 
-	public static void roundRect(GuiGraphicsExtractor graphics, float x, float y, float w, float h, float radius, int color) {
+	public static void roundRect(GuiGraphics graphics, float x, float y, float w, float h, float radius, int color) {
 		int s = scale();
 		int px = Math.round(x * s);
 		int py = Math.round(y * s);
@@ -96,7 +96,7 @@ public final class Draw {
 		pose.popMatrix();
 	}
 
-	public static void outline(GuiGraphicsExtractor graphics, float x, float y, float w, float h, float radius, int color) {
+	public static void outline(GuiGraphics graphics, float x, float y, float w, float h, float radius, int color) {
 		int s = scale();
 		int px = Math.round(x * s);
 		int py = Math.round(y * s);
@@ -116,7 +116,7 @@ public final class Draw {
 		pose.popMatrix();
 	}
 
-	public static void glow(GuiGraphicsExtractor graphics, float x, float y, float w, float h, float radius, float spread, int color) {
+	public static void glow(GuiGraphics graphics, float x, float y, float w, float h, float radius, float spread, int color) {
 		int s = scale();
 		int inner = Math.round(radius * s);
 		int reach = Math.round(spread * s);
@@ -138,7 +138,7 @@ public final class Draw {
 		pose.popMatrix();
 	}
 
-	public static void card(GuiGraphicsExtractor graphics, float centerX, float centerY, float w, float h, float radius, float taper, int top, int bottom, int border) {
+	public static void card(GuiGraphics graphics, float centerX, float centerY, float w, float h, float radius, float taper, int top, int bottom, int border) {
 		if (Math.abs(taper) < FLAT_TAPER) {
 			flatCard(graphics, centerX - w / 2, centerY - h / 2, w, h, radius, top, bottom, border);
 			return;
@@ -172,7 +172,7 @@ public final class Draw {
 		pose.popMatrix();
 	}
 
-	private static void flatCard(GuiGraphicsExtractor graphics, float x, float y, float w, float h, float radius, int top, int bottom, int border) {
+	private static void flatCard(GuiGraphics graphics, float x, float y, float w, float h, float radius, int top, int bottom, int border) {
 		int s = scale();
 		int px = Math.round(x * s);
 		int py = Math.round(y * s);

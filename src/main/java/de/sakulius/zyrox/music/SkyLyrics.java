@@ -7,7 +7,7 @@ import de.sakulius.zyrox.module.Modules;
 import de.sakulius.zyrox.screen.CameraRig;
 import de.sakulius.zyrox.screen.Fx;
 import java.util.List;
-import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderContext;
+import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderContext;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.network.chat.Component;
@@ -72,7 +72,7 @@ public final class SkyLyrics {
 		return null;
 	}
 
-	public static void render(LevelRenderContext context) {
+	public static void render(WorldRenderContext context) {
 		long now = System.nanoTime();
 		float dt = Math.min((now - lastFrame) / 1_000_000_000f, 0.1f);
 		lastFrame = now;
@@ -88,16 +88,16 @@ public final class SkyLyrics {
 			return;
 		updateAnchor(client, dt);
 
-		var camera = client.gameRenderer.mainCamera();
+		var camera = client.gameRenderer.getMainCamera();
 		var offset = anchor.subtract(camera.position());
 		float bob = (float) Math.sin(ZyroxTheme.time() * BOB_SPEED) * BOB_BLOCKS;
 		float alpha = visible * (track.playing() ? 1f : PAUSED_ALPHA);
 		float size = WORLD_SCALE * SIZE_SCALES[Math.clamp(MusicManager.skySize, 0, SIZE_SCALES.length - 1)];
 
-		var pose = context.poseStack();
+		var pose = context.matrices();
 		pose.pushPose();
 		pose.translate(offset.x, offset.y + bob, offset.z);
-		pose.rotate(camera.rotation());
+		pose.mulPose(camera.rotation());
 
 		var message = message();
 		var lines = MusicManager.lines();
@@ -174,7 +174,7 @@ public final class SkyLyrics {
 		return Component.literal(text).withStyle(FONT.withColor(color));
 	}
 
-	private static void line(LevelRenderContext context, Font font, PoseStack pose, Component text, float y, float scale, float alpha) {
+	private static void line(WorldRenderContext context, Font font, PoseStack pose, Component text, float y, float scale, float alpha) {
 		if (alpha < MIN_VISIBLE)
 			return;
 		int width = font.width(text);
@@ -183,7 +183,7 @@ public final class SkyLyrics {
 		pose.translate(0f, y, 0f);
 		pose.scale(fitted, -fitted, fitted);
 		int color = Fx.alpha(OPAQUE | TEXT, alpha);
-		context.submitNodeCollector().submitText(pose, -width / 2f, 0f, text.getVisualOrderText(), false, Font.DisplayMode.SEE_THROUGH, FULL_BRIGHT, color, 0, Fx.alpha(OUTLINE, alpha));
+		context.commandQueue().submitText(pose, -width / 2f, 0f, text.getVisualOrderText(), false, Font.DisplayMode.SEE_THROUGH, FULL_BRIGHT, color, 0, Fx.alpha(OUTLINE, alpha));
 		pose.popPose();
 	}
 }

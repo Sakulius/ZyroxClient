@@ -4,7 +4,7 @@ import de.sakulius.zyrox.HudStyle;
 import de.sakulius.zyrox.screen.Draw;
 import de.sakulius.zyrox.screen.ZyroxScreen;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 
 public abstract class HudModule extends Module {
 	public static final float MIN_SCALE = 0.5f;
@@ -29,7 +29,7 @@ public abstract class HudModule extends Module {
 
 	public abstract int contentHeight(Minecraft client);
 
-	protected abstract void render(GuiGraphicsExtractor graphics, Minecraft client, int left, int top);
+	protected abstract void render(GuiGraphics graphics, Minecraft client, int left, int top);
 
 	public final void setScale(float value) {
 		scale = Math.clamp(Math.round(value / SCALE_STEP) * SCALE_STEP, MIN_SCALE, MAX_SCALE);
@@ -53,7 +53,7 @@ public abstract class HudModule extends Module {
 		return height;
 	}
 
-	public final void render(GuiGraphicsExtractor graphics, Minecraft client) {
+	public final void render(GuiGraphics graphics, Minecraft client) {
 		int left = left(client);
 		int top = top(client);
 		var pose = graphics.pose();
@@ -70,7 +70,7 @@ public abstract class HudModule extends Module {
 	}
 
 	protected static boolean editing(Minecraft client) {
-		return client.gui.screen() instanceof ZyroxScreen;
+		return client.screen instanceof ZyroxScreen;
 	}
 
 	public final int left(Minecraft client) {

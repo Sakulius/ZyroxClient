@@ -3,7 +3,7 @@ package de.sakulius.zyrox.screen;
 import de.sakulius.zyrox.ZyroxTheme;
 import de.sakulius.zyrox.module.News;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
 import net.minecraft.client.gui.screens.Screen;
@@ -33,11 +33,11 @@ public class NewsCard extends AbstractWidget {
 	@Override
 	public void onClick(MouseButtonEvent event, boolean doubleClick) {
 		if (News.item() != null)
-			Minecraft.getInstance().gui.setScreen(new NewsScreen(parent));
+			Minecraft.getInstance().setScreen(new NewsScreen(parent));
 	}
 
 	@Override
-	protected void extractWidgetRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
+	protected void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float delta) {
 		long now = System.nanoTime();
 		float dt = Math.min((now - lastFrame) / 1_000_000_000f, 0.1f);
 		lastFrame = now;
@@ -71,7 +71,7 @@ public class NewsCard extends AbstractWidget {
 		Type.REGULAR.draw(graphics, font, fitted(font, Type.REGULAR, detail, w - 16), x + 8, y + h - 13, Fx.alpha(MUTED, alpha));
 	}
 
-	private void cover(GuiGraphicsExtractor graphics, News.Picture picture, int x, int y, int w, int h) {
+	private void cover(GuiGraphics graphics, News.Picture picture, int x, int y, int w, int h) {
 		float scale = Math.max((float) w / picture.width(), (float) h / picture.height());
 		int regionW = Math.round(w / scale);
 		int regionH = Math.round(h / scale);

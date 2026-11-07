@@ -3,7 +3,7 @@ package de.sakulius.zyrox.screen;
 import com.mojang.blaze3d.platform.InputConstants;
 import de.sakulius.zyrox.ZyroxTheme;
 import java.util.function.Consumer;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.KeyEvent;
@@ -69,16 +69,16 @@ public class WaypointNameScreen extends Screen {
 
 	@Override
 	public void onClose() {
-		minecraft.gui.setScreen(parent);
+		minecraft.setScreen(parent);
 	}
 
 	@Override
-	public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
+	public void render(GuiGraphics graphics, int mouseX, int mouseY, float delta) {
 		Draw.roundRect(graphics, left(), top(), CARD_WIDTH, CARD_HEIGHT, 8f, PANEL_COLOR);
 		Draw.outline(graphics, left(), top(), CARD_WIDTH, CARD_HEIGHT, 8f, Fx.alpha(ZyroxTheme.accent(), 0.8f));
 		Draw.outline(graphics, left() + 1, top() + 1, CARD_WIDTH - 2, CARD_HEIGHT - 2, 7f, PANEL_BORDER);
 		Type.SEMIBOLD.draw(graphics, font, title, left() + 10, top() + 10, TEXT);
 		Type.REGULAR.draw(graphics, font, "Enter saves, Esc cancels", left() + 10, top() + 52, MUTED);
-		super.extractRenderState(graphics, mouseX, mouseY, delta);
+		super.render(graphics, mouseX, mouseY, delta);
 	}
 }

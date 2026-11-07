@@ -20,7 +20,7 @@ public final class Zoom {
 
 	public static boolean isHeld() {
 		return Modules.ZOOM.enabled && ZyroxClient.zoomKey != null && ZyroxClient.zoomKey.isDown()
-			&& Minecraft.getInstance().gui.screen() == null;
+			&& Minecraft.getInstance().screen == null;
 	}
 
 	public static void scroll(double amount) {

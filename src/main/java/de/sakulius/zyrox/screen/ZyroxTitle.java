@@ -4,7 +4,7 @@ import de.sakulius.zyrox.ZyroxClient;
 import de.sakulius.zyrox.ZyroxTheme;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
@@ -57,7 +57,7 @@ public final class ZyroxTitle {
 		return Math.max(6, (height - total) / 2);
 	}
 
-	public static void background(GuiGraphicsExtractor graphics, int width, int height, float alpha) {
+	public static void background(GuiGraphics graphics, int width, int height, float alpha) {
 		float end = width * SCRIM_WIDTH;
 		float step = end / STRIPS;
 		for (int i = 0; i < STRIPS; i++) {
@@ -73,7 +73,7 @@ public final class ZyroxTitle {
 		return value - (float) Math.floor(value);
 	}
 
-	private static void sparks(GuiGraphicsExtractor graphics, int width, int height, float alpha) {
+	private static void sparks(GuiGraphics graphics, int width, int height, float alpha) {
 		float seconds = Util.getMillis() / 1000f;
 		int accent = ZyroxTheme.accent();
 		for (int i = 0; i < SPARKS; i++) {
@@ -86,23 +86,23 @@ public final class ZyroxTitle {
 		}
 	}
 
-	public static void logo(GuiGraphicsExtractor graphics, float alpha) {
+	public static void logo(GuiGraphics graphics, float alpha) {
 		graphics.blit(RenderPipelines.GUI_TEXTURED, LOGO, COLUMN_X, headerTop, 0f, 0f, LOGO_WIDTH, LOGO_HEIGHT, LOGO_TEXTURE_WIDTH, LOGO_TEXTURE_HEIGHT, LOGO_TEXTURE_WIDTH, LOGO_TEXTURE_HEIGHT, Fx.alpha(TEXT, alpha));
 		Draw.roundRect(graphics, COLUMN_X, headerTop + LOGO_HEIGHT + 4, 34, 2, 1f, Fx.alpha(ZyroxTheme.accent(), alpha));
 	}
 
-	public static void splash(GuiGraphicsExtractor graphics, Font font, Component text, float alpha) {
+	public static void splash(GuiGraphics graphics, Font font, Component text, float alpha) {
 		float pulse = 1f + (float) Math.sin(Util.getMillis() / 1000f * PULSE_SPEED) * PULSE;
 		int y = headerTop + LOGO_HEIGHT + 11;
 		var pose = graphics.pose();
 		pose.pushMatrix();
 		pose.translate(COLUMN_X, y + 4f);
 		pose.scale(pulse, pulse);
-		graphics.text(font, text, 0, -4, Fx.alpha(TEXT, alpha), true);
+		graphics.drawString(font, text, 0, -4, Fx.alpha(TEXT, alpha), true);
 		pose.popMatrix();
 	}
 
-	public static void version(GuiGraphicsExtractor graphics, Font font, int height, float alpha) {
+	public static void version(GuiGraphics graphics, Font font, int height, float alpha) {
 		if (versionText == null) {
 			versionText = "Zyrox Client " + FabricLoader.getInstance().getModContainer(ZyroxClient.MOD_ID)
 				.map(mod -> mod.getMetadata().getVersion().getFriendlyString()).orElse("");

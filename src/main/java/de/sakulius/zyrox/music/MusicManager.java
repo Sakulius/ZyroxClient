@@ -50,6 +50,8 @@ public final class MusicManager {
 	}
 
 	public static void start() {
+		if (!WindowsMediaSession.SUPPORTED)
+			return;
 		if (!System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("windows"))
 			return;
 		var worker = new Thread(MusicManager::run, "Zyrox-Music");

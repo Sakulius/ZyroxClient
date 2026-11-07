@@ -1,16 +1,15 @@
 package de.sakulius.zyrox.mixin;
 
-import de.sakulius.zyrox.module.Zoom;
 import de.sakulius.zyrox.screen.CameraRig;
 import net.minecraft.client.Camera;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(Camera.class)
 public abstract class CameraMixin {
@@ -23,8 +22,8 @@ public abstract class CameraMixin {
 	@Shadow
 	protected abstract void setPosition(Vec3 position);
 
-	@Inject(method = "alignWithEntity", at = @At("TAIL"))
-	private void zyrox$menuCamera(float partialTick, CallbackInfo ci) {
+	@Inject(method = "setup", at = @At("TAIL"))
+	private void zyrox$menuCamera(Level level, Entity focused, boolean detached, boolean mirrored, float partialTick, CallbackInfo ci) {
 		var pose = CameraRig.pose(entity, partialTick);
 		if (pose != null) {
 			setPosition(pose.position());
@@ -32,8 +31,4 @@ public abstract class CameraMixin {
 		}
 	}
 
-	@Inject(method = "calculateFov", at = @At("RETURN"), cancellable = true)
-	private void zyrox$fov(float partialTick, CallbackInfoReturnable<Float> cir) {
-		cir.setReturnValue(CameraRig.fov(cir.getReturnValue()) / Zoom.divisor());
-	}
 }

@@ -18,11 +18,11 @@ import de.sakulius.zyrox.screen.WaypointNameScreen;
 import de.sakulius.zyrox.screen.ZyroxScreen;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
-import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
-import net.fabricmc.fabric.api.client.rendering.v1.LivingEntityRenderLayerRegistrationCallback;
-import net.fabricmc.fabric.api.client.rendering.v1.PictureInPictureRendererRegistry;
+import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
+import net.fabricmc.fabric.api.client.rendering.v1.LivingEntityFeatureRendererRegistrationCallback;
+import net.fabricmc.fabric.api.client.rendering.v1.SpecialGuiElementRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
-import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderEvents;
+import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents;
 import net.fabricmc.fabric.api.event.player.AttackEntityCallback;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
@@ -46,16 +46,16 @@ public class ZyroxClient implements ClientModInitializer {
 		ZyroxConfig.load();
 
 		var category = KeyMapping.Category.register(Identifier.fromNamespaceAndPath(MOD_ID, "main"));
-		menuKey = KeyMappingHelper.registerKeyMapping(new KeyMapping("key.zyrox.menu", InputConstants.Type.KEYBOARD, InputConstants.KEY_RSHIFT, category));
-		zoomKey = KeyMappingHelper.registerKeyMapping(new KeyMapping("key.zyrox.zoom", InputConstants.Type.KEYBOARD, InputConstants.KEY_C, category));
+		menuKey = KeyBindingHelper.registerKeyBinding(new KeyMapping("key.zyrox.menu", InputConstants.Type.KEYSYM, InputConstants.KEY_RSHIFT, category));
+		zoomKey = KeyBindingHelper.registerKeyBinding(new KeyMapping("key.zyrox.zoom", InputConstants.Type.KEYSYM, InputConstants.KEY_C, category));
 
-		playPauseKey = KeyMappingHelper.registerKeyMapping(new KeyMapping("key.zyrox.playpause", InputConstants.Type.KEYBOARD, InputConstants.UNKNOWN.getValue(), category));
-		nextKey = KeyMappingHelper.registerKeyMapping(new KeyMapping("key.zyrox.next", InputConstants.Type.KEYBOARD, InputConstants.UNKNOWN.getValue(), category));
-		previousKey = KeyMappingHelper.registerKeyMapping(new KeyMapping("key.zyrox.previous", InputConstants.Type.KEYBOARD, InputConstants.UNKNOWN.getValue(), category));
-		waypointKey = KeyMappingHelper.registerKeyMapping(new KeyMapping("key.zyrox.waypoint", InputConstants.Type.KEYBOARD, InputConstants.KEY_B, category));
-		PictureInPictureRendererRegistry.register(context -> new PlayerPreviewRenderer());
+		playPauseKey = KeyBindingHelper.registerKeyBinding(new KeyMapping("key.zyrox.playpause", InputConstants.Type.KEYSYM, InputConstants.UNKNOWN.getValue(), category));
+		nextKey = KeyBindingHelper.registerKeyBinding(new KeyMapping("key.zyrox.next", InputConstants.Type.KEYSYM, InputConstants.UNKNOWN.getValue(), category));
+		previousKey = KeyBindingHelper.registerKeyBinding(new KeyMapping("key.zyrox.previous", InputConstants.Type.KEYSYM, InputConstants.UNKNOWN.getValue(), category));
+		waypointKey = KeyBindingHelper.registerKeyBinding(new KeyMapping("key.zyrox.waypoint", InputConstants.Type.KEYSYM, InputConstants.KEY_B, category));
+		SpecialGuiElementRegistry.register(context -> new PlayerPreviewRenderer(context.vertexConsumers()));
 		MusicManager.start();
-		LevelRenderEvents.COLLECT_SUBMITS.register(SkyLyrics::render);
+		WorldRenderEvents.AFTER_ENTITIES.register(SkyLyrics::render);
 
 		AttackEntityCallback.EVENT.register((player, level, hand, entity, hit) -> level.isClientSide() ? PvpTracker.onAttack(player, entity) : InteractionResult.PASS);
 
@@ -69,17 +69,17 @@ public class ZyroxClient implements ClientModInitializer {
 			while (previousKey.consumeClick())
 				MusicManager.send(WindowsMediaSession.Control.PREVIOUS);
 			while (menuKey.consumeClick())
-				client.gui.setScreen(new ZyroxScreen());
+				client.setScreen(new ZyroxScreen());
 			while (waypointKey.consumeClick())
 				if (Waypoints.canAdd(client))
-					client.gui.setScreen(new WaypointNameScreen(null, "New waypoint", Waypoints.nextName(client), name -> Waypoints.add(client, name)));
+					client.setScreen(new WaypointNameScreen(null, "New waypoint", Waypoints.nextName(client), name -> Waypoints.add(client, name)));
 			updateAutoSprint(client);
 			PvpTracker.tick(client);
 			Cosmetics.tick(client);
 			CloudCosmetics.tick(client);
 		});
 
-		LivingEntityRenderLayerRegistrationCallback.EVENT.register((type, renderer, helper, context) -> {
+		LivingEntityFeatureRendererRegistrationCallback.EVENT.register((type, renderer, helper, context) -> {
 			if (renderer instanceof AvatarRenderer<?> avatar)
 				helper.register(new WearableLayer(avatar));
 		});
@@ -94,7 +94,7 @@ public class ZyroxClient implements ClientModInitializer {
 	}
 
 	private static void updateAutoSprint(Minecraft client) {
-		boolean active = Modules.AUTO_SPRINT.enabled && client.player != null && client.gui.screen() == null;
+		boolean active = Modules.AUTO_SPRINT.enabled && client.player != null && client.screen == null;
 		if (active)
 			client.options.keySprint.setDown(true);
 		else if (sprintHeld)

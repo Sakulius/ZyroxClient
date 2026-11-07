@@ -1,6 +1,6 @@
 package de.sakulius.zyrox.screen;
 
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 
 public final class Fx {
 	private Fx() {
@@ -72,13 +72,13 @@ public final class Fx {
 		return 1 + 2.2f * inverse * inverse * inverse + 1.2f * inverse * inverse;
 	}
 
-	public static void roundRect(GuiGraphicsExtractor graphics, int x1, int y1, int x2, int y2, int color) {
+	public static void roundRect(GuiGraphics graphics, int x1, int y1, int x2, int y2, int color) {
 		graphics.fill(x1 + 1, y1, x2 - 1, y2, color);
 		graphics.fill(x1, y1 + 1, x1 + 1, y2 - 1, color);
 		graphics.fill(x2 - 1, y1 + 1, x2, y2 - 1, color);
 	}
 
-	public static void quad(GuiGraphicsExtractor graphics, float x1, float y1, float x2, float y2, int top, int bottom) {
+	public static void quad(GuiGraphics graphics, float x1, float y1, float x2, float y2, int top, int bottom) {
 		var pose = graphics.pose();
 		pose.pushMatrix();
 		pose.translate(x1, y1);
@@ -87,7 +87,7 @@ public final class Fx {
 		pose.popMatrix();
 	}
 
-	public static void line(GuiGraphicsExtractor graphics, float x1, float y1, float x2, float y2, int color) {
+	public static void line(GuiGraphics graphics, float x1, float y1, float x2, float y2, int color) {
 		float length = (float) Math.hypot(x2 - x1, y2 - y1);
 		var pose = graphics.pose();
 		pose.pushMatrix();

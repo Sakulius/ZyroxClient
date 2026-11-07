@@ -4,7 +4,7 @@ import de.sakulius.zyrox.HudStyle;
 import de.sakulius.zyrox.screen.Type;
 import java.util.function.Function;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 
 public class TextHudModule extends HudModule {
 	private static final int PADDING_X = 5;
@@ -35,7 +35,7 @@ public class TextHudModule extends HudModule {
 	}
 
 	@Override
-	protected void render(GuiGraphicsExtractor graphics, Minecraft client, int left, int top) {
+	protected void render(GuiGraphics graphics, Minecraft client, int left, int top) {
 		HudStyle.panel(graphics, left, top, contentWidth(client), HEIGHT);
 		HudStyle.text(graphics, client.font, text.apply(client), left + PADDING_X, top + TEXT_Y, left, top);
 	}

@@ -17,7 +17,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public class MouseHandlerMixin {
 	@Inject(method = "onButton", at = @At("HEAD"))
 	private void zyrox$countClick(long window, MouseButtonInfo info, int action, CallbackInfo ci) {
-		if (action != InputConstants.PRESS || Minecraft.getInstance().gui.screen() != null)
+		if (action != InputConstants.PRESS || Minecraft.getInstance().screen != null)
 			return;
 		if (info.button() == InputConstants.MOUSE_BUTTON_LEFT)
 			ClickTracker.LEFT.click();

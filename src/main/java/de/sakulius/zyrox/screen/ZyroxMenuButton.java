@@ -3,7 +3,7 @@ package de.sakulius.zyrox.screen;
 import de.sakulius.zyrox.ZyroxTheme;
 import java.util.function.Consumer;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractButton;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
@@ -41,7 +41,7 @@ public class ZyroxMenuButton extends AbstractButton {
 	}
 
 	@Override
-	protected void extractContents(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
+	protected void renderContents(GuiGraphics graphics, int mouseX, int mouseY, float delta) {
 		long now = System.nanoTime();
 		float dt = Math.min((now - lastFrame) / 1_000_000_000f, 0.1f);
 		lastFrame = now;

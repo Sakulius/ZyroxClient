@@ -6,7 +6,7 @@ import de.sakulius.zyrox.screen.Draw;
 import de.sakulius.zyrox.screen.Type;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 
 public class KeystrokesModule extends HudModule {
 	private static final int KEY = 20;
@@ -33,7 +33,7 @@ public class KeystrokesModule extends HudModule {
 	}
 
 	@Override
-	protected void render(GuiGraphicsExtractor graphics, Minecraft client, int left, int top) {
+	protected void render(GuiGraphics graphics, Minecraft client, int left, int top) {
 		var options = client.options;
 		int step = KEY + GAP;
 		key(graphics, client, options.keyUp, "W", left + step, top, KEY, KEY);
@@ -45,7 +45,7 @@ public class KeystrokesModule extends HudModule {
 		key(graphics, client, options.keyJump, "", left, top + step * 3, WIDTH, SPACE_HEIGHT);
 	}
 
-	private static void key(GuiGraphicsExtractor graphics, Minecraft client, KeyMapping mapping, String label, int x, int y, int width, int height) {
+	private static void key(GuiGraphics graphics, Minecraft client, KeyMapping mapping, String label, int x, int y, int width, int height) {
 		HudStyle.panel(graphics, x, y, width, height);
 		if (mapping.isDown())
 			Draw.roundRect(graphics, x, y, width, height, HudStyle.radius(), ZyroxTheme.hudAccent(x, y));

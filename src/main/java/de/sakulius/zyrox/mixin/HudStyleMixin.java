@@ -1,10 +1,10 @@
 package de.sakulius.zyrox.mixin;
 
-import com.mojang.renderpearl.api.pipeline.RenderPipeline;
+import com.mojang.blaze3d.pipeline.RenderPipeline;
 import de.sakulius.zyrox.HudStyle;
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
-import net.minecraft.client.gui.Hud;
+import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.Gui;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import org.spongepowered.asm.mixin.Mixin;
@@ -12,14 +12,14 @@ import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Redirect;
 
-@Mixin(Hud.class)
+@Mixin(Gui.class)
 public class HudStyleMixin {
 	@Unique
-	private static final String FILL = "Lnet/minecraft/client/gui/GuiGraphicsExtractor;fill(IIIII)V";
+	private static final String FILL = "Lnet/minecraft/client/gui/GuiGraphics;fill(IIIII)V";
 	@Unique
-	private static final String TEXT = "Lnet/minecraft/client/gui/GuiGraphicsExtractor;text(Lnet/minecraft/client/gui/Font;Lnet/minecraft/network/chat/Component;IIIZ)V";
+	private static final String TEXT = "Lnet/minecraft/client/gui/GuiGraphics;drawString(Lnet/minecraft/client/gui/Font;Lnet/minecraft/network/chat/Component;IIIZ)V";
 	@Unique
-	private static final String SPRITE = "Lnet/minecraft/client/gui/GuiGraphicsExtractor;blitSprite(Lcom/mojang/renderpearl/api/pipeline/RenderPipeline;Lnet/minecraft/resources/Identifier;IIII)V";
+	private static final String SPRITE = "Lnet/minecraft/client/gui/GuiGraphics;blitSprite(Lcom/mojang/blaze3d/pipeline/RenderPipeline;Lnet/minecraft/resources/Identifier;IIII)V";
 	@Unique
 	private static final int SCOREBOARD_PADDING = 2;
 	@Unique
@@ -35,7 +35,7 @@ public class HudStyleMixin {
 	private int zyrox$bottom;
 
 	@Redirect(method = "displayScoreboardSidebar", at = @At(value = "INVOKE", target = FILL, ordinal = 0))
-	private void zyrox$firstBackground(GuiGraphicsExtractor graphics, int x0, int y0, int x1, int y1, int color) {
+	private void zyrox$firstBackground(GuiGraphics graphics, int x0, int y0, int x1, int y1, int color) {
 		if (!HudStyle.scoreboard) {
 			graphics.fill(x0, y0, x1, y1, color);
 			return;
@@ -47,7 +47,7 @@ public class HudStyleMixin {
 	}
 
 	@Redirect(method = "displayScoreboardSidebar", at = @At(value = "INVOKE", target = FILL, ordinal = 1))
-	private void zyrox$secondBackground(GuiGraphicsExtractor graphics, int x0, int y0, int x1, int y1, int color) {
+	private void zyrox$secondBackground(GuiGraphics graphics, int x0, int y0, int x1, int y1, int color) {
 		if (!HudStyle.scoreboard) {
 			graphics.fill(x0, y0, x1, y1, color);
 			return;
@@ -60,37 +60,37 @@ public class HudStyleMixin {
 	}
 
 	@Redirect(method = "displayScoreboardSidebar", at = @At(value = "INVOKE", target = TEXT, ordinal = 2))
-	private void zyrox$scoreNumber(GuiGraphicsExtractor graphics, Font font, Component text, int x, int y, int color, boolean shadow) {
+	private void zyrox$scoreNumber(GuiGraphics graphics, Font font, Component text, int x, int y, int color, boolean shadow) {
 		if (!HudStyle.hideScores)
-			graphics.text(font, text, x, y, color, shadow);
+			graphics.drawString(font, text, x, y, color, shadow);
 	}
 
-	@Redirect(method = "extractItemHotbar", at = @At(value = "INVOKE", target = SPRITE, ordinal = 0))
-	private void zyrox$hotbar(GuiGraphicsExtractor graphics, RenderPipeline pipeline, Identifier sprite, int x, int y, int w, int h) {
+	@Redirect(method = "renderItemHotbar", at = @At(value = "INVOKE", target = SPRITE, ordinal = 0))
+	private void zyrox$hotbar(GuiGraphics graphics, RenderPipeline pipeline, Identifier sprite, int x, int y, int w, int h) {
 		if (HudStyle.hotbar)
 			HudStyle.panel(graphics, x, y, w, h);
 		else
 			graphics.blitSprite(pipeline, sprite, x, y, w, h);
 	}
 
-	@Redirect(method = "extractItemHotbar", at = @At(value = "INVOKE", target = SPRITE, ordinal = 1))
-	private void zyrox$selectedSlot(GuiGraphicsExtractor graphics, RenderPipeline pipeline, Identifier sprite, int x, int y, int w, int h) {
+	@Redirect(method = "renderItemHotbar", at = @At(value = "INVOKE", target = SPRITE, ordinal = 1))
+	private void zyrox$selectedSlot(GuiGraphics graphics, RenderPipeline pipeline, Identifier sprite, int x, int y, int w, int h) {
 		if (HudStyle.hotbar)
 			HudStyle.slotHighlight(graphics, x + SLOT_INSET, y + SLOT_INSET, w - SLOT_INSET * 2, h - SLOT_INSET * 2);
 		else
 			graphics.blitSprite(pipeline, sprite, x, y, w, h);
 	}
 
-	@Redirect(method = "extractItemHotbar", at = @At(value = "INVOKE", target = SPRITE, ordinal = 2))
-	private void zyrox$offhandLeft(GuiGraphicsExtractor graphics, RenderPipeline pipeline, Identifier sprite, int x, int y, int w, int h) {
+	@Redirect(method = "renderItemHotbar", at = @At(value = "INVOKE", target = SPRITE, ordinal = 2))
+	private void zyrox$offhandLeft(GuiGraphics graphics, RenderPipeline pipeline, Identifier sprite, int x, int y, int w, int h) {
 		if (HudStyle.hotbar)
 			HudStyle.panel(graphics, x, y + 1, w - 7, h - 2);
 		else
 			graphics.blitSprite(pipeline, sprite, x, y, w, h);
 	}
 
-	@Redirect(method = "extractItemHotbar", at = @At(value = "INVOKE", target = SPRITE, ordinal = 3))
-	private void zyrox$offhandRight(GuiGraphicsExtractor graphics, RenderPipeline pipeline, Identifier sprite, int x, int y, int w, int h) {
+	@Redirect(method = "renderItemHotbar", at = @At(value = "INVOKE", target = SPRITE, ordinal = 3))
+	private void zyrox$offhandRight(GuiGraphics graphics, RenderPipeline pipeline, Identifier sprite, int x, int y, int w, int h) {
 		if (HudStyle.hotbar)
 			HudStyle.panel(graphics, x + 7, y + 1, w - 7, h - 2);
 		else

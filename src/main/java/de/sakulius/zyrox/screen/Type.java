@@ -3,7 +3,7 @@ package de.sakulius.zyrox.screen;
 import de.sakulius.zyrox.HudStyle;
 import de.sakulius.zyrox.ZyroxClient;
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.FontDescription;
 import net.minecraft.network.chat.Style;
@@ -36,11 +36,11 @@ public enum Type {
 		return font.width(of(text));
 	}
 
-	public void draw(GuiGraphicsExtractor graphics, Font font, String text, int x, int y, int color) {
-		graphics.text(font, of(text), x, y, color, HudStyle.usesTextShadow());
+	public void draw(GuiGraphics graphics, Font font, String text, int x, int y, int color) {
+		graphics.drawString(font, of(text), x, y, color, HudStyle.usesTextShadow());
 	}
 
-	public void centered(GuiGraphicsExtractor graphics, Font font, String text, int x, int y, int color) {
+	public void centered(GuiGraphics graphics, Font font, String text, int x, int y, int color) {
 		draw(graphics, font, text, x - width(font, text) / 2, y, color);
 	}
 }

@@ -72,7 +72,7 @@ public final class News {
 	}
 
 	public static void tick(Minecraft client) {
-		if (fetching || url.isBlank() || nextFetch != 0 && !(client.gui.screen() instanceof TitleScreen))
+		if (fetching || url.isBlank() || nextFetch != 0 && !(client.screen instanceof TitleScreen))
 			return;
 		long now = System.currentTimeMillis();
 		if (now < nextFetch)

@@ -8,7 +8,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Pattern;
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 
 public final class HudStyle {
 	public record Swatch(String name, int color) {
@@ -141,11 +141,11 @@ public final class HudStyle {
 		return Fx.alpha(swatchColor(TINTS, tint) | 0xFF000000, opacity / (float) OPACITY_STEPS * alpha);
 	}
 
-	public static void panel(GuiGraphicsExtractor graphics, float x, float y, float w, float h) {
+	public static void panel(GuiGraphics graphics, float x, float y, float w, float h) {
 		panel(graphics, x, y, w, h, 1f);
 	}
 
-	public static void panel(GuiGraphicsExtractor graphics, float x, float y, float w, float h, float alpha) {
+	public static void panel(GuiGraphics graphics, float x, float y, float w, float h, float alpha) {
 		if (panelStyle == NO_PANEL)
 			return;
 		int radius = radius();
@@ -158,11 +158,11 @@ public final class HudStyle {
 			Draw.outline(graphics, x, y, w, h, radius, Fx.alpha(BORDER, alpha));
 	}
 
-	public static void slotHighlight(GuiGraphicsExtractor graphics, float x, float y, float w, float h) {
+	public static void slotHighlight(GuiGraphics graphics, float x, float y, float w, float h) {
 		Draw.roundRect(graphics, x, y, w, h, Math.max(0, radius() - INNER_ROUNDING), SLOT_HIGHLIGHT);
 	}
 
-	public static void text(GuiGraphicsExtractor graphics, Font font, String text, int x, int y, int left, int top) {
+	public static void text(GuiGraphics graphics, Font font, String text, int x, int y, int left, int top) {
 		if (!twoTone || ZyroxTheme.chromaHud) {
 			Type.REGULAR.draw(graphics, font, text, x, y, ZyroxTheme.hudText(left, top));
 			return;

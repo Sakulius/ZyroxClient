@@ -26,7 +26,7 @@ import java.util.function.Consumer;
 import java.util.function.IntConsumer;
 import java.util.function.IntSupplier;
 import java.util.function.Supplier;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
@@ -45,7 +45,7 @@ public class ZyroxScreen extends Screen {
 	}
 
 	private interface TilePreview {
-		void draw(GuiGraphicsExtractor graphics, int x, int y, int size, float alpha);
+		void draw(GuiGraphics graphics, int x, int y, int size, float alpha);
 	}
 
 	private abstract static class Row {
@@ -57,7 +57,7 @@ public class ZyroxScreen extends Screen {
 			this.height = height;
 		}
 
-		abstract void draw(GuiGraphicsExtractor graphics, int x, int y, int w, int mouseX, int mouseY, float alpha);
+		abstract void draw(GuiGraphics graphics, int x, int y, int w, int mouseX, int mouseY, float alpha);
 
 		abstract void click(double mouseX, int x, int y, int w);
 	}
@@ -202,7 +202,7 @@ public class ZyroxScreen extends Screen {
 		}
 	}
 
-	private void pill(GuiGraphicsExtractor graphics, int x, int y, float amount, int accent, float alpha) {
+	private void pill(GuiGraphics graphics, int x, int y, float amount, int accent, float alpha) {
 		Draw.roundRect(graphics, x, y, SWITCH_WIDTH, SWITCH_HEIGHT, SWITCH_HEIGHT / 2f, Fx.alpha(Fx.mix(SWITCH_OFF, accent, amount), alpha));
 		float knobX = x + 2 + amount * (SWITCH_WIDTH - SWITCH_HEIGHT);
 		Draw.roundRect(graphics, knobX, y + 2, SWITCH_HEIGHT - 4, SWITCH_HEIGHT - 4, (SWITCH_HEIGHT - 4) / 2f, Fx.alpha(TEXT, alpha));
@@ -211,7 +211,7 @@ public class ZyroxScreen extends Screen {
 	private Row toggle(String id, String name, String detail, BooleanSupplier on, Consumer<Boolean> set) {
 		return new Row(id, ROW_HEIGHT) {
 			@Override
-			void draw(GuiGraphicsExtractor graphics, int x, int y, int w, int mouseX, int mouseY, float alpha) {
+			void draw(GuiGraphics graphics, int x, int y, int w, int mouseX, int mouseY, float alpha) {
 				float anim = Fx.approach(toggleAnim.getOrDefault(id, on.getAsBoolean() ? 1f : 0f), on.getAsBoolean() ? 1f : 0f, dt, 16f);
 				toggleAnim.put(id, anim);
 				if (inside(mouseX, mouseY, x, y, w, height))
@@ -233,7 +233,7 @@ public class ZyroxScreen extends Screen {
 	private Row select(String id, String name, Supplier<List<String>> values, IntSupplier get, IntConsumer set) {
 		return new Row(id, ROW_HEIGHT) {
 			@Override
-			void draw(GuiGraphicsExtractor graphics, int x, int y, int w, int mouseX, int mouseY, float alpha) {
+			void draw(GuiGraphics graphics, int x, int y, int w, int mouseX, int mouseY, float alpha) {
 				if (inside(mouseX, mouseY, x, y, w, height))
 					Draw.roundRect(graphics, x, y, w, height, ROW_RADIUS, Fx.alpha(HOVER, alpha));
 				Type.SEMIBOLD.draw(graphics, font, name, x + 8, y + 11, Fx.alpha(TEXT, alpha));
@@ -255,7 +255,7 @@ public class ZyroxScreen extends Screen {
 	private Row button(String id, String name, Runnable action) {
 		return new Row(id, 24) {
 			@Override
-			void draw(GuiGraphicsExtractor graphics, int x, int y, int w, int mouseX, int mouseY, float alpha) {
+			void draw(GuiGraphics graphics, int x, int y, int w, int mouseX, int mouseY, float alpha) {
 				boolean hovered = inside(mouseX, mouseY, x, y, w, height);
 				Draw.roundRect(graphics, x, y, w, height, ROW_RADIUS, Fx.alpha(Fx.mix(ZyroxTheme.accent(), TEXT, hovered ? 0.12f : 0f), alpha));
 				Type.SEMIBOLD.centered(graphics, font, name, x + w / 2, y + 8, Fx.alpha(TEXT, alpha));
@@ -272,7 +272,7 @@ public class ZyroxScreen extends Screen {
 	private Row note(String text) {
 		return new Row("note", 14) {
 			@Override
-			void draw(GuiGraphicsExtractor graphics, int x, int y, int w, int mouseX, int mouseY, float alpha) {
+			void draw(GuiGraphics graphics, int x, int y, int w, int mouseX, int mouseY, float alpha) {
 				Type.REGULAR.draw(graphics, font, fitted(text, w - 16), x + 8, y + 3, Fx.alpha(MUTED, alpha));
 			}
 
@@ -285,7 +285,7 @@ public class ZyroxScreen extends Screen {
 	private Row swatches() {
 		return new Row("theme", 40) {
 			@Override
-			void draw(GuiGraphicsExtractor graphics, int x, int y, int w, int mouseX, int mouseY, float alpha) {
+			void draw(GuiGraphics graphics, int x, int y, int w, int mouseX, int mouseY, float alpha) {
 				Type.SEMIBOLD.draw(graphics, font, "Accent color", x + 8, y + 5, Fx.alpha(TEXT, alpha));
 				Type.REGULAR.draw(graphics, font, ZyroxTheme.CHOICES.get(ZyroxTheme.index).name(), x + w - 8 - Type.REGULAR.width(font, ZyroxTheme.CHOICES.get(ZyroxTheme.index).name()), y + 5, Fx.alpha(MUTED, alpha));
 				for (int i = 0; i < ZyroxTheme.CHOICES.size(); i++) {
@@ -361,7 +361,7 @@ public class ZyroxScreen extends Screen {
 	private Row stylePreview() {
 		return new Row("hud-preview", 34) {
 			@Override
-			void draw(GuiGraphicsExtractor graphics, int x, int y, int w, int mouseX, int mouseY, float alpha) {
+			void draw(GuiGraphics graphics, int x, int y, int w, int mouseX, int mouseY, float alpha) {
 				HudStyle.begin();
 				int left = x + 8;
 				for (var text : List.of("FPS 573", "BPS 0.0")) {
@@ -382,7 +382,7 @@ public class ZyroxScreen extends Screen {
 	private Row colorRow(String id, String name, List<HudStyle.Swatch> colors, IntSupplier get, IntConsumer set) {
 		return new Row(id, 40) {
 			@Override
-			void draw(GuiGraphicsExtractor graphics, int x, int y, int w, int mouseX, int mouseY, float alpha) {
+			void draw(GuiGraphics graphics, int x, int y, int w, int mouseX, int mouseY, float alpha) {
 				var chosen = colors.get(Math.clamp(get.getAsInt(), 0, colors.size() - 1)).name();
 				Type.SEMIBOLD.draw(graphics, font, name, x + 8, y + 5, Fx.alpha(TEXT, alpha));
 				Type.REGULAR.draw(graphics, font, chosen, x + w - 8 - Type.REGULAR.width(font, chosen), y + 5, Fx.alpha(MUTED, alpha));
@@ -441,7 +441,7 @@ public class ZyroxScreen extends Screen {
 	private Row tabs(String id, List<String> labels, IntSupplier get, IntConsumer set) {
 		return new Row(id, TAB_HEIGHT) {
 			@Override
-			void draw(GuiGraphicsExtractor graphics, int x, int y, int w, int mouseX, int mouseY, float alpha) {
+			void draw(GuiGraphics graphics, int x, int y, int w, int mouseX, int mouseY, float alpha) {
 				for (int i = 0; i < labels.size(); i++) {
 					int tabX = tabX(x, w, labels.size(), i);
 					int tabWidth = tabWidth(w, labels.size());
@@ -522,7 +522,7 @@ public class ZyroxScreen extends Screen {
 		return tiles;
 	}
 
-	private void nothingIcon(GuiGraphicsExtractor graphics, int x, int y, int size, float alpha) {
+	private void nothingIcon(GuiGraphics graphics, int x, int y, int size, float alpha) {
 		int ring = size / 2;
 		Draw.outline(graphics, x + (size - ring) / 2f, y + (size - ring) / 2f, ring, ring, ring / 2f, Fx.alpha(MUTED, alpha));
 	}
@@ -558,7 +558,7 @@ public class ZyroxScreen extends Screen {
 		int rows = (tiles.size() + tileColumns(w) - 1) / tileColumns(w);
 		return new Row("grid", TILE_TOP + rows * (TILE_HEIGHT + TILE_GAP)) {
 			@Override
-			void draw(GuiGraphicsExtractor graphics, int x, int y, int w, int mouseX, int mouseY, float alpha) {
+			void draw(GuiGraphics graphics, int x, int y, int w, int mouseX, int mouseY, float alpha) {
 				int tileWidth = tileWidth(w);
 				for (int i = 0; i < tiles.size(); i++) {
 					var tile = tiles.get(i);
@@ -590,7 +590,7 @@ public class ZyroxScreen extends Screen {
 	private Row syncStatus() {
 		return new Row("sync", 14) {
 			@Override
-			void draw(GuiGraphicsExtractor graphics, int x, int y, int w, int mouseX, int mouseY, float alpha) {
+			void draw(GuiGraphics graphics, int x, int y, int w, int mouseX, int mouseY, float alpha) {
 				var text = switch (CloudCosmetics.status()) {
 					case NOT_SET_UP -> "Zyrox server offline, only you see them.";
 					case WAITING -> "Syncs once you are in a world.";
@@ -610,7 +610,7 @@ public class ZyroxScreen extends Screen {
 	private Row nowPlayingCard() {
 		return new Row("track", 44) {
 			@Override
-			void draw(GuiGraphicsExtractor graphics, int x, int y, int w, int mouseX, int mouseY, float alpha) {
+			void draw(GuiGraphics graphics, int x, int y, int w, int mouseX, int mouseY, float alpha) {
 				Draw.roundRect(graphics, x, y, w, height, ROW_RADIUS, Fx.alpha(HOVER, alpha));
 				var track = MusicManager.track();
 				if (track == null) {
@@ -638,7 +638,7 @@ public class ZyroxScreen extends Screen {
 		var controls = new WindowsMediaSession.Control[] { WindowsMediaSession.Control.PREVIOUS, WindowsMediaSession.Control.TOGGLE, WindowsMediaSession.Control.NEXT };
 		return new Row("controls", 24) {
 			@Override
-			void draw(GuiGraphicsExtractor graphics, int x, int y, int w, int mouseX, int mouseY, float alpha) {
+			void draw(GuiGraphics graphics, int x, int y, int w, int mouseX, int mouseY, float alpha) {
 				int width = (w - 8) / labels.length;
 				for (int i = 0; i < labels.length; i++) {
 					int bx = x + i * (width + 4);
@@ -662,7 +662,7 @@ public class ZyroxScreen extends Screen {
 		String[] labels = { "2D on screen", "3D in the sky" };
 		return new Row("lyrics-view", 42) {
 			@Override
-			void draw(GuiGraphicsExtractor graphics, int x, int y, int w, int mouseX, int mouseY, float alpha) {
+			void draw(GuiGraphics graphics, int x, int y, int w, int mouseX, int mouseY, float alpha) {
 				Type.SEMIBOLD.draw(graphics, font, "Lyrics view", x + 8, y + 4, Fx.alpha(TEXT, alpha));
 				int top = y + 16;
 				int inner = w - 16;
@@ -739,7 +739,7 @@ public class ZyroxScreen extends Screen {
 			rows.add(note("Join a world to use waypoints."));
 			return rows;
 		}
-		rows.add(button("add-waypoint", "Add waypoint here", () -> minecraft.gui.setScreen(new WaypointNameScreen(this, "New waypoint", Waypoints.nextName(minecraft), name -> Waypoints.add(minecraft, name)))));
+		rows.add(button("add-waypoint", "Add waypoint here", () -> minecraft.setScreen(new WaypointNameScreen(this, "New waypoint", Waypoints.nextName(minecraft), name -> Waypoints.add(minecraft, name)))));
 		var list = Waypoints.here(minecraft);
 		for (int i = 0; i < list.size(); i++)
 			rows.add(waypointRow("waypoint-" + i, list.get(i)));
@@ -750,7 +750,7 @@ public class ZyroxScreen extends Screen {
 	private Row waypointRow(String id, Waypoints.Waypoint waypoint) {
 		return new Row(id, ROW_HEIGHT) {
 			@Override
-			void draw(GuiGraphicsExtractor graphics, int x, int y, int w, int mouseX, int mouseY, float alpha) {
+			void draw(GuiGraphics graphics, int x, int y, int w, int mouseX, int mouseY, float alpha) {
 				if (inside(mouseX, mouseY, x, y, w, height))
 					Draw.roundRect(graphics, x, y, w, height, ROW_RADIUS, Fx.alpha(HOVER, alpha));
 				Draw.roundRect(graphics, x + 7, y + 7, 6, 6, 3f, Fx.alpha(waypoint.color, waypoint.visible ? alpha : alpha * 0.35f));
@@ -768,7 +768,7 @@ public class ZyroxScreen extends Screen {
 				if (from <= WAYPOINT_DELETE) {
 					Waypoints.remove(minecraft, waypoint);
 				} else if (from <= WAYPOINT_EDIT) {
-					minecraft.gui.setScreen(new WaypointNameScreen(ZyroxScreen.this, "Rename waypoint", waypoint.name, name -> {
+					minecraft.setScreen(new WaypointNameScreen(ZyroxScreen.this, "Rename waypoint", waypoint.name, name -> {
 						waypoint.name = name;
 						Waypoints.save();
 					}));
@@ -907,9 +907,9 @@ public class ZyroxScreen extends Screen {
 	}
 
 	@Override
-	public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
+	public void renderBackground(GuiGraphics graphics, int mouseX, int mouseY, float delta) {
 		if (minecraft.level == null)
-			super.extractBackground(graphics, mouseX, mouseY, delta);
+			super.renderBackground(graphics, mouseX, mouseY, delta);
 		long now = System.nanoTime();
 		dt = Math.min((now - lastFrame) / 1_000_000_000f, 0.1f);
 		lastFrame = now;
@@ -917,9 +917,9 @@ public class ZyroxScreen extends Screen {
 		open = Math.min(1f, open + dt * OPEN_SPEED);
 		if (isClosing) {
 			closing = Math.min(1f, closing + dt * CLOSE_SPEED);
-			if (closing >= 1f && minecraft.gui.screen() == this) {
+			if (closing >= 1f && minecraft.screen == this) {
 				if (parent != null)
-					minecraft.gui.setScreen(parent);
+					minecraft.setScreen(parent);
 				else
 					super.onClose();
 				return;
@@ -960,7 +960,7 @@ public class ZyroxScreen extends Screen {
 		return position + delta;
 	}
 
-	private void grid(GuiGraphicsExtractor graphics) {
+	private void grid(GuiGraphics graphics) {
 		int color = Fx.alpha(0x26FFFFFF, editAmount);
 		for (int x = 0; x < width; x += GRID)
 			graphics.fill(x, 0, x + 1, height, color);
@@ -972,7 +972,7 @@ public class ZyroxScreen extends Screen {
 	}
 
 	@Override
-	public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
+	public void render(GuiGraphics graphics, int mouseX, int mouseY, float delta) {
 		if (editAmount > 0.01f) {
 			graphics.nextStratum();
 			editOverlay(graphics, mouseX, mouseY);
@@ -981,7 +981,7 @@ public class ZyroxScreen extends Screen {
 		if (fade < 0.02f)
 			return;
 		if (preview != null)
-			preview.extractRenderState(graphics, mouseX, mouseY, delta);
+			preview.render(graphics, mouseX, mouseY, delta);
 		int menuX = editing ? -1000 : mouseX;
 		int menuY = editing ? -1000 : mouseY;
 		float carouselAlpha = fade * (1 - panelAmount);
@@ -991,7 +991,7 @@ public class ZyroxScreen extends Screen {
 			panel(graphics, menuX, menuY, fade * panelAmount);
 	}
 
-	private void carousel(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float alpha) {
+	private void carousel(GuiGraphics graphics, int mouseX, int mouseY, float alpha) {
 		var order = new ArrayList<Integer>();
 		for (int i = 0; i < pages.size(); i++)
 			if (Math.abs(relative(i)) < VISIBLE_RANGE)
@@ -1012,7 +1012,7 @@ public class ZyroxScreen extends Screen {
 		}
 	}
 
-	private void card(GuiGraphicsExtractor graphics, Page page, float rel, int mouseX, int mouseY, float alpha) {
+	private void card(GuiGraphics graphics, Page page, float rel, int mouseX, int mouseY, float alpha) {
 		float side = Math.clamp(rel, -1f, 1f);
 		float amount = Math.abs(side);
 		float excess = Math.abs(rel) - amount;
@@ -1066,7 +1066,7 @@ public class ZyroxScreen extends Screen {
 		pose.popMatrix();
 	}
 
-	private void panel(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float alpha) {
+	private void panel(GuiGraphics graphics, int mouseX, int mouseY, float alpha) {
 		graphics.nextStratum();
 		var pose = graphics.pose();
 		float slide = (1 - Fx.easeOutCubic(panelAmount)) * 40f;
@@ -1108,7 +1108,7 @@ public class ZyroxScreen extends Screen {
 		pose.popMatrix();
 	}
 
-	private void editOverlay(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
+	private void editOverlay(GuiGraphics graphics, int mouseX, int mouseY) {
 		for (var module : Modules.ALL) {
 			if (!module.enabled || !(module instanceof HudModule hud))
 				continue;

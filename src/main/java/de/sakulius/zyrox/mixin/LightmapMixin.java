@@ -1,20 +1,21 @@
 package de.sakulius.zyrox.mixin;
 
 import de.sakulius.zyrox.module.Modules;
-import net.minecraft.client.renderer.LightmapRenderStateExtractor;
-import net.minecraft.client.renderer.state.LightmapRenderState;
+import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.client.renderer.LightTexture;
+import net.minecraft.core.Holder;
+import net.minecraft.world.effect.MobEffect;
+import net.minecraft.world.effect.MobEffects;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.Redirect;
 
-@Mixin(LightmapRenderStateExtractor.class)
+@Mixin(LightTexture.class)
 public class LightmapMixin {
-	@Inject(method = "extract", at = @At("TAIL"))
-	private void zyrox$fullbright(LightmapRenderState state, float partialTick, CallbackInfo ci) {
-		if (Modules.FULLBRIGHT.enabled) {
-			state.nightVisionEffectIntensity = 1f;
-			state.nightVisionColor = LightmapRenderStateExtractor.WHITE;
-		}
+	@Redirect(method = "updateLightTexture", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/player/LocalPlayer;hasEffect(Lnet/minecraft/core/Holder;)Z"))
+	private boolean zyrox$fullbright(LocalPlayer player, Holder<MobEffect> effect) {
+		if (Modules.FULLBRIGHT.enabled && effect == MobEffects.NIGHT_VISION)
+			return true;
+		return player.hasEffect(effect);
 	}
 }

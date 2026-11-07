@@ -81,7 +81,7 @@ public class ZyroxClientTest implements FabricClientGameTest {
 		testMenuSplash(context);
 
 		try (TestSingleplayerContext singleplayer = context.worldBuilder().create()) {
-			var connection = singleplayer.getConnection();
+			var connection = singleplayer.getClientWorld();
 			var server = singleplayer.getServer();
 			connection.waitForChunksRender();
 			testMusic(context);
@@ -101,10 +101,10 @@ public class ZyroxClientTest implements FabricClientGameTest {
 			context.takeScreenshot("zyrox-hud");
 			input.releaseKey(options -> options.keyUp);
 
-			float normalFov = context.computeOnClient(client -> client.gameRenderer.mainCamera().getFov());
+			float normalFov = context.computeOnClient(client -> ((de.sakulius.zyrox.mixin.GameRendererAccessor) client.gameRenderer).zyrox$fov(client.gameRenderer.getMainCamera(), 1f, true));
 			input.holdKey(ZyroxClient.zoomKey);
 			context.waitTicks(15);
-			float zoomedFov = context.computeOnClient(client -> client.gameRenderer.mainCamera().getFov());
+			float zoomedFov = context.computeOnClient(client -> ((de.sakulius.zyrox.mixin.GameRendererAccessor) client.gameRenderer).zyrox$fov(client.gameRenderer.getMainCamera(), 1f, true));
 			check(zoomedFov < normalFov * 0.5f, "zoom narrows the view, " + normalFov + " to " + zoomedFov);
 			input.releaseKey(ZyroxClient.zoomKey);
 			context.waitTicks(15);
@@ -305,7 +305,7 @@ public class ZyroxClientTest implements FabricClientGameTest {
 
 			input.pressKey(InputConstants.KEY_RSHIFT);
 			context.waitTicks(ANIMATION_TICKS);
-			check(context.computeOnClient(client -> client.gui.screen() == null), "menu key closes the menu");
+			check(context.computeOnClient(client -> client.screen == null), "menu key closes the menu");
 			check(context.computeOnClient(client -> client.options.getCameraType()) == CameraType.FIRST_PERSON, "the camera returns to first person");
 
 			fps.enabled = true;
@@ -327,7 +327,7 @@ public class ZyroxClientTest implements FabricClientGameTest {
 		int before = context.computeOnClient(client -> Waypoints.here(client).size());
 		input.pressKey(ZyroxClient.waypointKey);
 		context.waitTicks(4);
-		check(context.computeOnClient(client -> client.gui.screen() instanceof WaypointNameScreen), "the waypoint key asks for a name");
+		check(context.computeOnClient(client -> client.screen instanceof WaypointNameScreen), "the waypoint key asks for a name");
 		context.takeScreenshot("waypoint-name");
 		input.pressKey(InputConstants.KEY_END);
 		for (int i = 0; i < 12; i++)
@@ -335,7 +335,7 @@ public class ZyroxClientTest implements FabricClientGameTest {
 		input.typeChars("Home");
 		input.pressKey(InputConstants.KEY_RETURN);
 		context.waitTicks(4);
-		check(context.computeOnClient(client -> client.gui.screen() == null), "enter closes the name box");
+		check(context.computeOnClient(client -> client.screen == null), "enter closes the name box");
 		check(context.computeOnClient(client -> Waypoints.here(client).size()) == before + 1, "the waypoint is saved");
 		check(context.computeOnClient(client -> Waypoints.here(client).getLast().name).equals("Home"), "the waypoint has the typed name");
 		server.runCommand("tp @a ~ ~ ~6");
@@ -363,7 +363,7 @@ public class ZyroxClientTest implements FabricClientGameTest {
 		Modules.BADGE.enabled = false;
 		check(context.computeOnClient(client -> !de.sakulius.zyrox.module.ZyroxBadge.shows(own)), "the switch turns the badge off");
 		Modules.BADGE.enabled = true;
-		check(context.computeOnClient(client -> client.gui.hud.getTabList().getNameForDisplay(client.getConnection().getPlayerInfo(own)).getString().contains("")), "the tab list shows the badge");
+		check(context.computeOnClient(client -> client.gui.getTabList().getNameForDisplay(client.getConnection().getPlayerInfo(own)).getString().contains("")), "the tab list shows the badge");
 		var friend = UUID.fromString("11111111-2222-3333-4444-555555555555");
 		context.runOnClient(client -> {
 			var player = new RemotePlayer(client.level, new GameProfile(friend, "ZyroxFriend"));
@@ -523,7 +523,7 @@ public class ZyroxClientTest implements FabricClientGameTest {
 		context.waitTicks(40);
 		context.takeScreenshot("splash-web");
 		int[] card = context.computeOnClient(client -> {
-			for (var child : client.gui.screen().children())
+			for (var child : client.screen.children())
 				if (child instanceof NewsCard news)
 					return new int[] { news.getX() + news.getWidth() / 2, news.getY() + news.getHeight() / 2, (int) client.getWindow().getGuiScale() };
 			throw new AssertionError("the main menu has no news card");
@@ -532,7 +532,7 @@ public class ZyroxClientTest implements FabricClientGameTest {
 		context.waitTick();
 		context.getInput().pressMouse(InputConstants.MOUSE_BUTTON_LEFT);
 		context.waitTicks(10);
-		check(context.computeOnClient(client -> client.gui.screen() instanceof NewsScreen), "clicking the news opens the changelog");
+		check(context.computeOnClient(client -> client.screen instanceof NewsScreen), "clicking the news opens the changelog");
 		context.takeScreenshot("news-changelog");
 		context.getInput().scroll(-10);
 		context.waitTicks(15);
@@ -540,18 +540,18 @@ public class ZyroxClientTest implements FabricClientGameTest {
 		context.getInput().pressKey(InputConstants.KEY_ESCAPE);
 		context.waitForScreen(TitleScreen.class);
 		int[] cosmetics = context.computeOnClient(client -> {
-			for (var child : client.gui.screen().children())
+			for (var child : client.screen.children())
 				if (child instanceof ZyroxMenuButton button && button.getMessage().getString().equals("Cosmetics"))
 					return new int[] { button.getX() + button.getWidth() / 2, button.getY() + button.getHeight() / 2, (int) client.getWindow().getGuiScale() };
 			throw new AssertionError("the main menu has no cosmetics button");
 		});
-		check(context.computeOnClient(client -> client.gui.screen().children().stream().anyMatch(child -> child instanceof PlayerPreviewWidget)), "the main menu shows the player");
+		check(context.computeOnClient(client -> client.screen.children().stream().anyMatch(child -> child instanceof PlayerPreviewWidget)), "the main menu shows the player");
 		Cosmetics.hatId = "party_hat";
 		Cosmetics.capeId = "nebula";
 		context.waitTicks(4);
 		context.takeScreenshot("title-player");
 		int[] model = context.computeOnClient(client -> {
-			for (var child : client.gui.screen().children())
+			for (var child : client.screen.children())
 				if (child instanceof PlayerPreviewWidget widget)
 					return new int[] { widget.getX() + widget.getWidth() / 2, widget.getY() + widget.getHeight() / 2, (int) client.getWindow().getGuiScale() };
 			throw new AssertionError("no player preview");
@@ -569,14 +569,14 @@ public class ZyroxClientTest implements FabricClientGameTest {
 		context.waitTick();
 		context.getInput().pressMouse(InputConstants.MOUSE_BUTTON_LEFT);
 		context.waitTicks(25);
-		check(context.computeOnClient(client -> client.gui.screen() instanceof ZyroxScreen screen && screen.isFromTitle() && screen.isPanelOpen()), "the cosmetics button opens the cosmetics");
+		check(context.computeOnClient(client -> client.screen instanceof ZyroxScreen screen && screen.isFromTitle() && screen.isPanelOpen()), "the cosmetics button opens the cosmetics");
 		context.takeScreenshot("title-cosmetics");
 		context.getInput().pressKey(InputConstants.KEY_ESCAPE);
 		context.waitForScreen(TitleScreen.class);
 		Cosmetics.hatId = Cosmetics.NOTHING;
 		Cosmetics.capeId = Cosmetics.DEFAULT_CAPE;
 		int[] options = context.computeOnClient(client -> {
-			for (var child : client.gui.screen().children())
+			for (var child : client.screen.children())
 				if (child instanceof ZyroxMenuButton button && button.getMessage().getString().startsWith("Options"))
 					return new int[] { button.getX() + button.getWidth() / 2, button.getY() + button.getHeight() / 2, (int) client.getWindow().getGuiScale() };
 			throw new AssertionError("the menu has no restyled options button");
@@ -586,7 +586,7 @@ public class ZyroxClientTest implements FabricClientGameTest {
 		context.takeScreenshot("title-hover");
 		context.getInput().pressMouse(InputConstants.MOUSE_BUTTON_LEFT);
 		context.waitTicks(2);
-		check(context.computeOnClient(client -> client.gui.screen() instanceof OptionsScreen), "the restyled buttons still work");
+		check(context.computeOnClient(client -> client.screen instanceof OptionsScreen), "the restyled buttons still work");
 		context.getInput().pressKey(InputConstants.KEY_ESCAPE);
 		context.waitForScreen(TitleScreen.class);
 
@@ -739,7 +739,7 @@ public class ZyroxClientTest implements FabricClientGameTest {
 		System.out.println("ZYROXTEST lrclib lines: " + real.size());
 		check(real.size() > 10, "searching lrclib finds a remastered title, got " + real.size());
 
-		try (var session = new WindowsMediaSession()) {
+		if (WindowsMediaSession.SUPPORTED) try (var session = new WindowsMediaSession()) {
 			var snapshot = session.read(true);
 			System.out.println("ZYROXTEST session ok, spotify found: " + (snapshot != null) + (snapshot == null ? "" : ", duration known: " + (snapshot.durationMs() > 0) + ", playing: " + snapshot.playing() + ", title length: " + snapshot.title().length()));
 		} catch (Throwable t) {
@@ -771,11 +771,11 @@ public class ZyroxClientTest implements FabricClientGameTest {
 	}
 
 	private ZyroxScreen screen() {
-		return context.computeOnClient(client -> client.gui.screen() instanceof ZyroxScreen screen ? screen : null);
+		return context.computeOnClient(client -> client.screen instanceof ZyroxScreen screen ? screen : null);
 	}
 
 	private void clickOn(Function<ZyroxScreen, int[]> target) {
-		int[] position = context.computeOnClient(client -> target.apply((ZyroxScreen) client.gui.screen()));
+		int[] position = context.computeOnClient(client -> target.apply((ZyroxScreen) client.screen));
 		var input = context.getInput();
 		input.setCursorPos(position[0] * scale, position[1] * scale);
 		context.waitTick();

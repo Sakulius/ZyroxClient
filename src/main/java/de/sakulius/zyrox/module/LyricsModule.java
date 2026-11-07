@@ -10,7 +10,7 @@ import de.sakulius.zyrox.screen.Type;
 import java.util.List;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 
 public class LyricsModule extends HudModule {
 	private static final int WIDTH = 280;
@@ -46,7 +46,7 @@ public class LyricsModule extends HudModule {
 	}
 
 	@Override
-	protected void render(GuiGraphicsExtractor graphics, Minecraft client, int left, int top) {
+	protected void render(GuiGraphics graphics, Minecraft client, int left, int top) {
 		long now = System.nanoTime();
 		float dt = Math.min((now - lastFrame) / 1_000_000_000f, 0.1f);
 		lastFrame = now;
@@ -114,7 +114,7 @@ public class LyricsModule extends HudModule {
 		return Math.clamp((float) (position - line.timeMs()) / Math.max(1L, length), 0f, 1f);
 	}
 
-	private static void line(GuiGraphicsExtractor graphics, Minecraft client, String text, int left, int centerY, float near, float alpha, float progress) {
+	private static void line(GuiGraphics graphics, Minecraft client, String text, int left, int centerY, float near, float alpha, float progress) {
 		var font = client.font;
 		if (near > 0.02f)
 			fitted(graphics, font, largest(font, text), text, left, centerY, Fx.alpha(TEXT, alpha * near), progress);
@@ -129,7 +129,7 @@ public class LyricsModule extends HudModule {
 		return Type.SEMIBOLD;
 	}
 
-	private static void fitted(GuiGraphicsExtractor graphics, Font font, Type type, String text, int left, int centerY, int color, float progress) {
+	private static void fitted(GuiGraphics graphics, Font font, Type type, String text, int left, int centerY, int color, float progress) {
 		int available = WIDTH - SIDE_PADDING * 2;
 		int width = type.width(font, text);
 		int textHeight = type == Type.LARGE ? 13 : 8;
@@ -154,7 +154,7 @@ public class LyricsModule extends HudModule {
 		graphics.disableScissor();
 	}
 
-	private static void dots(GuiGraphicsExtractor graphics, float centerX, float centerY, float alpha) {
+	private static void dots(GuiGraphics graphics, float centerX, float centerY, float alpha) {
 		float time = ZyroxTheme.time();
 		for (int i = 0; i < DOTS; i++) {
 			float pulse = 0.4f + 0.6f * (0.5f + 0.5f * (float) Math.sin(time * 4f - i * 0.8f));

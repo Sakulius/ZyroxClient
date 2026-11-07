@@ -9,10 +9,9 @@ import de.sakulius.zyrox.screen.ZyroxTitle;
 import java.util.ArrayList;
 import java.util.Comparator;
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.Button;
-import net.minecraft.client.gui.components.FriendsButton;
 import net.minecraft.client.gui.components.LogoRenderer;
 import net.minecraft.client.gui.components.PlainTextButton;
 import net.minecraft.client.gui.components.SplashRenderer;
@@ -53,16 +52,11 @@ public abstract class TitleScreenMixin extends Screen {
 	private void zyrox$init(CallbackInfo ci) {
 		if (zyrox$gameSplash == null)
 			zyrox$gameSplash = splash;
-		FriendsButton friends = null;
 		var wide = new ArrayList<Button>();
 		var small = new ArrayList<AbstractWidget>();
 		for (var child : children()) {
 			if (child instanceof PlainTextButton)
 				continue;
-			if (child instanceof FriendsButton found) {
-				friends = found;
-				continue;
-			}
 			if (child instanceof Button button && button.getWidth() >= ZYROX_WIDE_BUTTON)
 				wide.add(button);
 			else if (child instanceof AbstractWidget widget && widget.getWidth() < ZYROX_WIDE_BUTTON)
@@ -86,11 +80,11 @@ public abstract class TitleScreenMixin extends Screen {
 			widget.setY(y);
 			x += ZyroxTitle.ICON_STEP;
 		}
-		zyrox$rightSide(friends);
+		zyrox$rightSide();
 	}
 
 	@Unique
-	private void zyrox$rightSide(FriendsButton friends) {
+	private void zyrox$rightSide() {
 		int cardWidth = Math.clamp(Math.round(width * ZyroxTitle.NEWS_SHARE), ZyroxTitle.NEWS_MIN_WIDTH, ZyroxTitle.NEWS_MAX_WIDTH);
 		int cardHeight = cardWidth * 9 / 16;
 		int left = width - ZyroxTitle.SIDE_MARGIN - cardWidth;
@@ -98,14 +92,7 @@ public abstract class TitleScreenMixin extends Screen {
 		addRenderableWidget(new NewsCard(this, left, top, cardWidth, cardHeight));
 		int buttonsY = top + cardHeight + ZyroxTitle.SIDE_GAP;
 		int half = (cardWidth - ZyroxTitle.SIDE_GAP) / 2;
-		if (friends != null) {
-			removeWidget(friends);
-			var found = friends;
-			addRenderableWidget(new ZyroxMenuButton(Component.literal("Friends"), left, buttonsY, half, ZyroxTitle.BUTTON_HEIGHT, found::onPress, true));
-			addRenderableWidget(new ZyroxMenuButton(Component.literal("Cosmetics"), left + half + ZyroxTitle.SIDE_GAP, buttonsY, cardWidth - half - ZyroxTitle.SIDE_GAP, ZyroxTitle.BUTTON_HEIGHT, input -> minecraft.gui.setScreen(ZyroxScreen.cosmeticsFrom(this)), true));
-		} else {
-			addRenderableWidget(new ZyroxMenuButton(Component.literal("Cosmetics"), left, buttonsY, cardWidth, ZyroxTitle.BUTTON_HEIGHT, input -> minecraft.gui.setScreen(ZyroxScreen.cosmeticsFrom(this)), true));
-		}
+		addRenderableWidget(new ZyroxMenuButton(Component.literal("Cosmetics"), left, buttonsY, cardWidth, ZyroxTitle.BUTTON_HEIGHT, input -> minecraft.setScreen(ZyroxScreen.cosmeticsFrom(this)), true));
 		int modelTop = buttonsY + ZyroxTitle.BUTTON_HEIGHT + ZyroxTitle.SIDE_GAP;
 		int modelHeight = Math.min(height - ZyroxTitle.MODEL_BOTTOM - modelTop, Math.round(height * ZyroxTitle.MODEL_SHARE));
 		if (modelHeight >= ZyroxTitle.MODEL_MIN_HEIGHT) {
@@ -119,25 +106,25 @@ public abstract class TitleScreenMixin extends Screen {
 		cir.setReturnValue(false);
 	}
 
-	@Inject(method = "extractRenderState", at = @At("HEAD"))
-	private void zyrox$useText(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta, CallbackInfo ci) {
+	@Inject(method = "render", at = @At("HEAD"))
+	private void zyrox$useText(GuiGraphics graphics, int mouseX, int mouseY, float delta, CallbackInfo ci) {
 		var custom = MenuSplash.custom();
 		splash = custom != null ? custom : zyrox$gameSplash;
 	}
 
-	@Inject(method = "extractRenderState", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/gui/screens/Screen;extractRenderState(Lnet/minecraft/client/gui/GuiGraphicsExtractor;IIF)V"))
-	private void zyrox$background(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta, CallbackInfo ci) {
+	@Inject(method = "render", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/gui/screens/Screen;render(Lnet/minecraft/client/gui/GuiGraphics;IIF)V"))
+	private void zyrox$background(GuiGraphics graphics, int mouseX, int mouseY, float delta, CallbackInfo ci) {
 		ZyroxTitle.background(graphics, width, height, 1f);
 	}
 
-	@Redirect(method = "extractRenderState", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/gui/components/LogoRenderer;extractRenderState(Lnet/minecraft/client/gui/GuiGraphicsExtractor;IF)V"))
-	private void zyrox$logo(LogoRenderer logo, GuiGraphicsExtractor graphics, int width, float alpha) {
+	@Redirect(method = "render", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/gui/components/LogoRenderer;renderLogo(Lnet/minecraft/client/gui/GuiGraphics;IF)V"))
+	private void zyrox$logo(LogoRenderer logo, GuiGraphics graphics, int width, float alpha) {
 		ZyroxTitle.logo(graphics, alpha);
 		ZyroxTitle.version(graphics, font, height, alpha);
 	}
 
-	@Redirect(method = "extractRenderState", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/gui/components/SplashRenderer;extractRenderState(Lnet/minecraft/client/gui/GuiGraphicsExtractor;ILnet/minecraft/client/gui/Font;F)V"))
-	private void zyrox$splash(SplashRenderer renderer, GuiGraphicsExtractor graphics, int width, Font font, float alpha) {
+	@Redirect(method = "render", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/gui/components/SplashRenderer;render(Lnet/minecraft/client/gui/GuiGraphics;ILnet/minecraft/client/gui/Font;F)V"))
+	private void zyrox$splash(SplashRenderer renderer, GuiGraphics graphics, int width, Font font, float alpha) {
 		ZyroxTitle.splash(graphics, font, ((SplashRendererAccessor) renderer).zyrox$text(), alpha);
 	}
 }

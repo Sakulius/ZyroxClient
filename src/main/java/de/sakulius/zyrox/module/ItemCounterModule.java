@@ -7,7 +7,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Predicate;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.tags.ItemTags;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -76,14 +76,14 @@ public class ItemCounterModule extends HudModule {
 	}
 
 	@Override
-	protected void render(GuiGraphicsExtractor graphics, Minecraft client, int left, int top) {
+	protected void render(GuiGraphics graphics, Minecraft client, int left, int top) {
 		var lines = lines(client);
 		if (lines.isEmpty())
 			return;
 		HudStyle.panel(graphics, left, top, contentWidth(client), HEIGHT);
 		int x = left + PADDING;
 		for (var line : lines) {
-			graphics.fakeItem(line.icon(), x, top + 1);
+			graphics.renderFakeItem(line.icon(), x, top + 1);
 			x += ICON + 1;
 			Type.REGULAR.draw(graphics, client.font, line.count(), x, top + 5, ZyroxTheme.hudText(left, top));
 			x += Type.REGULAR.width(client.font, line.count()) + GAP;

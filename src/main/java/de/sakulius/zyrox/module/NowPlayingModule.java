@@ -8,7 +8,7 @@ import de.sakulius.zyrox.screen.Fx;
 import de.sakulius.zyrox.screen.Type;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 
 public class NowPlayingModule extends HudModule {
 	private static final int WIDTH = 150;
@@ -36,7 +36,7 @@ public class NowPlayingModule extends HudModule {
 	}
 
 	@Override
-	protected void render(GuiGraphicsExtractor graphics, Minecraft client, int left, int top) {
+	protected void render(GuiGraphics graphics, Minecraft client, int left, int top) {
 		var track = MusicManager.track();
 		if (track == null && !editing(client))
 			return;

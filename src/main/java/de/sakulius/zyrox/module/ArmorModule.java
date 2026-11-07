@@ -4,7 +4,7 @@ import de.sakulius.zyrox.HudStyle;
 import de.sakulius.zyrox.screen.Fx;
 import de.sakulius.zyrox.screen.Type;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.world.entity.EquipmentSlot;
 
 public class ArmorModule extends HudModule {
@@ -31,7 +31,7 @@ public class ArmorModule extends HudModule {
 	}
 
 	@Override
-	protected void render(GuiGraphicsExtractor graphics, Minecraft client, int left, int top) {
+	protected void render(GuiGraphics graphics, Minecraft client, int left, int top) {
 		var player = client.player;
 		if (player == null)
 			return;
@@ -47,7 +47,7 @@ public class ArmorModule extends HudModule {
 			if (stack.isEmpty())
 				continue;
 			int rowTop = top + 1 + i * ROW;
-			graphics.item(stack, left + 3, rowTop);
+			graphics.renderItem(stack, left + 3, rowTop);
 			if (stack.isDamageableItem()) {
 				float remaining = 1f - (float) stack.getDamageValue() / stack.getMaxDamage();
 				Type.REGULAR.draw(graphics, client.font, (int) (remaining * 100) + "%", left + 21, rowTop + 4, Fx.mix(BROKEN, FULL, remaining));

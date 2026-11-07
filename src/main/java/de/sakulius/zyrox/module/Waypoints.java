@@ -5,6 +5,7 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.JsonParseException;
 import com.google.gson.reflect.TypeToken;
 import de.sakulius.zyrox.ZyroxClient;
+import de.sakulius.zyrox.mixin.GameRendererAccessor;
 import de.sakulius.zyrox.screen.Draw;
 import de.sakulius.zyrox.screen.Type;
 import java.io.IOException;
@@ -17,7 +18,7 @@ import java.util.List;
 import java.util.Map;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
 import org.slf4j.Logger;
@@ -130,7 +131,7 @@ public final class Waypoints {
 		return (int) Math.round(Math.sqrt(client.player.distanceToSqr(waypoint.x + BLOCK_CENTER, waypoint.y + BLOCK_CENTER, waypoint.z + BLOCK_CENTER)));
 	}
 
-	public static void render(GuiGraphicsExtractor graphics, Minecraft client) {
+	public static void render(GuiGraphics graphics, Minecraft client) {
 		if (!Modules.WAYPOINTS.enabled || client.player == null || client.level == null)
 			return;
 		var dimension = client.level.dimension().identifier().toString();
@@ -140,11 +141,11 @@ public final class Waypoints {
 	}
 
 	public static float[] project(Minecraft client, double worldX, double worldY, double worldZ, int width, int height) {
-		var camera = client.gameRenderer.mainCamera();
+		var camera = client.gameRenderer.getMainCamera();
 		var from = camera.position();
 		var view = new Vector3f((float) (worldX - from.x), (float) (worldY - from.y), (float) (worldZ - from.z));
 		view.rotate(new Quaternionf(camera.rotation()).conjugate());
-		float focal = height / 2f / (float) Math.tan(Math.toRadians(camera.getFov()) / 2f);
+		float focal = height / 2f / (float) Math.tan(Math.toRadians(((GameRendererAccessor) client.gameRenderer).zyrox$fov(camera, client.getDeltaTracker().getGameTimeDeltaPartialTick(true), true)) / 2f);
 		float centerX = width / 2f;
 		float centerY = height / 2f;
 		float offsetX;
@@ -164,7 +165,7 @@ public final class Waypoints {
 		return new float[] { centerX + offsetX * shrink, centerY + offsetY * shrink };
 	}
 
-	private static void draw(GuiGraphicsExtractor graphics, Minecraft client, Waypoint waypoint) {
+	private static void draw(GuiGraphics graphics, Minecraft client, Waypoint waypoint) {
 		int width = client.getWindow().getGuiScaledWidth();
 		int height = client.getWindow().getGuiScaledHeight();
 		var at = project(client, waypoint.x + BLOCK_CENTER, waypoint.y + ABOVE_FEET, waypoint.z + BLOCK_CENTER, width, height);

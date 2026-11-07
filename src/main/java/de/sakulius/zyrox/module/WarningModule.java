@@ -5,7 +5,7 @@ import de.sakulius.zyrox.screen.Fx;
 import de.sakulius.zyrox.screen.Type;
 import java.util.function.Function;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.util.Util;
 
 public class WarningModule extends HudModule {
@@ -43,7 +43,7 @@ public class WarningModule extends HudModule {
 	}
 
 	@Override
-	protected void render(GuiGraphicsExtractor graphics, Minecraft client, int left, int top) {
+	protected void render(GuiGraphics graphics, Minecraft client, int left, int top) {
 		var text = client.player == null ? null : warning.apply(client);
 		if (text == null && !editing(client))
 			return;

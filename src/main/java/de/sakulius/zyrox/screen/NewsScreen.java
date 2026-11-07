@@ -5,7 +5,7 @@ import de.sakulius.zyrox.ZyroxTheme;
 import de.sakulius.zyrox.module.News;
 import java.util.ArrayList;
 import java.util.List;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
@@ -102,7 +102,7 @@ public class NewsScreen extends Screen {
 	}
 
 	@Override
-	public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
+	public void render(GuiGraphics graphics, int mouseX, int mouseY, float delta) {
 		long now = System.nanoTime();
 		float dt = Math.min((now - lastFrame) / 1_000_000_000f, 0.1f);
 		lastFrame = now;
@@ -144,7 +144,7 @@ public class NewsScreen extends Screen {
 		int y = textTop() - Math.round(scroll);
 		for (var line : lines) {
 			y += line.gapBefore();
-			graphics.text(font, line.text(), left + PADDING, y, line.color(), false);
+			graphics.drawString(font, line.text(), left + PADDING, y, line.color(), false);
 			y += LINE_HEIGHT;
 		}
 		graphics.disableScissor();
@@ -192,6 +192,6 @@ public class NewsScreen extends Screen {
 
 	@Override
 	public void onClose() {
-		minecraft.gui.setScreen(parent);
+		minecraft.setScreen(parent);
 	}
 }

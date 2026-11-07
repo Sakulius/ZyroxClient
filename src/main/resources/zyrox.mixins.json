@@ -1,12 +1,14 @@
 {
 	"required": true,
 	"package": "de.sakulius.zyrox.mixin",
-	"compatibilityLevel": "JAVA_25",
+	"compatibilityLevel": "JAVA_21",
 	"client": [
 		"AbstractClientPlayerMixin",
 		"AvatarRendererMixin",
 		"CameraMixin",
+		"GameRendererAccessor",
 		"GameRendererMixin",
+		"GuiGraphicsAccessor",
 		"HudMixin",
 		"HudStyleMixin",
 		"LightmapMixin",

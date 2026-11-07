@@ -4,13 +4,14 @@ import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.pipeline.TextureTarget;
 import com.mojang.blaze3d.resource.GraphicsResourceAllocator;
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.renderpearl.api.textures.FilterMode;
+import com.mojang.blaze3d.textures.FilterMode;
 import de.sakulius.zyrox.HudStyle;
 import de.sakulius.zyrox.ZyroxClient;
 import java.util.List;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.renderer.LevelTargetBundle;
+import net.minecraft.client.renderer.texture.AbstractTexture;
 import net.minecraft.resources.Identifier;
 import org.joml.Vector2f;
 
@@ -19,6 +20,30 @@ public final class Glass {
 		Identifier.fromNamespaceAndPath(ZyroxClient.MOD_ID, "hud_blur_light"),
 		Identifier.fromNamespaceAndPath(ZyroxClient.MOD_ID, "hud_blur_medium"),
 		Identifier.fromNamespaceAndPath(ZyroxClient.MOD_ID, "hud_blur_strong"));
+
+	private static final Identifier TEXTURE_ID = Identifier.fromNamespaceAndPath(ZyroxClient.MOD_ID, "generated/glass");
+
+	private static final class Backdrop extends AbstractTexture {
+		void show(RenderTarget source) {
+			texture = source.getColorTexture();
+			textureView = source.getColorTextureView();
+			sampler = RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR);
+		}
+
+		@Override
+		public void close() {
+		}
+	}
+
+	private static Backdrop backdrop;
+
+	private static Backdrop texture() {
+		if (backdrop == null) {
+			backdrop = new Backdrop();
+			Minecraft.getInstance().getTextureManager().register(TEXTURE_ID, backdrop);
+		}
+		return backdrop;
+	}
 
 	private static RenderTarget target;
 	private static RenderTarget retired;
@@ -42,16 +67,17 @@ public final class Glass {
 		}
 		if (target == null || target.width != main.width || target.height != main.height) {
 			retired = target;
-			target = new TextureTarget("zyrox glass", main.width, main.height, main.getColorTexture().getFormat(), null);
+			target = new TextureTarget("zyrox glass", main.width, main.height, false);
 		}
-		target.copyColorFrom(main);
+		RenderSystem.getDevice().createCommandEncoder().copyTextureToTexture(main.getColorTexture(), target.getColorTexture(), 0, 0, 0, 0, 0, main.width, main.height);
+		texture().show(target);
 		var chain = client.getShaderManager().getPostChain(CHAINS.get(Math.clamp(HudStyle.blur, 0, CHAINS.size() - 1)), LevelTargetBundle.MAIN_TARGETS);
 		if (chain != null)
 			chain.process(target, allocator);
 		ready = chain != null;
 	}
 
-	public static void draw(GuiGraphicsExtractor graphics, float x, float y, float w, float h, int radius) {
+	public static void draw(GuiGraphics graphics, float x, float y, float w, float h, int radius) {
 		if (!ready || target == null)
 			return;
 		var client = Minecraft.getInstance();
@@ -62,8 +88,6 @@ public final class Glass {
 		int pw = Math.round(w * s);
 		int ph = Math.round(h * s);
 		int r = Math.min(radius * s, Math.min(pw, ph) / 2);
-		var view = target.getColorTextureView();
-		var sampler = RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR);
 		var pose = graphics.pose();
 		pose.pushMatrix();
 		pose.scale(1f / s, 1f / s);
@@ -79,16 +103,16 @@ public final class Glass {
 		for (int row = 0; row < r; row++) {
 			float fromCorner = r - row - 0.5f;
 			int inset = r - Math.round((float) Math.sqrt(Math.max(0f, r * r - fromCorner * fromCorner)));
-			band(graphics, view, sampler, px + inset, py + row, pw - inset * 2, 1, u0 + inset * uPerPixel, v0 + row * vPerPixel, uPerPixel, vPerPixel);
-			band(graphics, view, sampler, px + inset, py + ph - row - 1, pw - inset * 2, 1, u0 + inset * uPerPixel, v0 + (ph - row - 1) * vPerPixel, uPerPixel, vPerPixel);
+			band(graphics, px + inset, py + row, pw - inset * 2, 1, u0 + inset * uPerPixel, v0 + row * vPerPixel, uPerPixel, vPerPixel);
+			band(graphics, px + inset, py + ph - row - 1, pw - inset * 2, 1, u0 + inset * uPerPixel, v0 + (ph - row - 1) * vPerPixel, uPerPixel, vPerPixel);
 		}
-		band(graphics, view, sampler, px, py + r, pw, ph - r * 2, u0, v0 + r * vPerPixel, uPerPixel, vPerPixel);
+		band(graphics, px, py + r, pw, ph - r * 2, u0, v0 + r * vPerPixel, uPerPixel, vPerPixel);
 		pose.popMatrix();
 	}
 
-	private static void band(GuiGraphicsExtractor graphics, com.mojang.renderpearl.api.textures.GpuTextureView view, com.mojang.renderpearl.api.textures.GpuSampler sampler, int x, int y, int w, int h, float u, float v, float uPerPixel, float vPerPixel) {
+	private static void band(GuiGraphics graphics, int x, int y, int w, int h, float u, float v, float uPerPixel, float vPerPixel) {
 		if (w <= 0 || h <= 0)
 			return;
-		graphics.blit(view, sampler, x, y, x + w, y + h, u, u + w * uPerPixel, 1f - v, 1f - (v + h * vPerPixel));
+		graphics.blit(TEXTURE_ID, x, y, x + w, y + h, u, u + w * uPerPixel, 1f - v, 1f - (v + h * vPerPixel));
 	}
 }

@@ -1,9 +1,10 @@
 package de.sakulius.zyrox.screen;
 
+import de.sakulius.zyrox.mixin.GuiGraphicsAccessor;
 import de.sakulius.zyrox.module.Cosmetics;
 import java.util.function.Supplier;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
 import net.minecraft.client.input.MouseButtonEvent;
@@ -54,13 +55,13 @@ public class PlayerPreviewWidget extends AbstractWidget {
 	}
 
 	@Override
-	protected void extractWidgetRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
+	protected void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float delta) {
 		var own = skin.get();
 		var id = Minecraft.getInstance().getGameProfile().id();
 		var dressed = Cosmetics.apply(id, true, own);
 		var hat = Cosmetics.hat(id, true);
 		float scale = FIT * getHeight() / MODEL_HEIGHT;
-		graphics.guiRenderState.addPicturesInPictureState(new PlayerPreviewState(
+		((GuiGraphicsAccessor) graphics).zyrox$state().submitPicturesInPictureState(new PlayerPreviewState(
 			own.model() == PlayerModelType.SLIM ? slim : wide, cape, own.body().texturePath(),
 			dressed.cape() == null ? null : dressed.cape().texturePath(), hat == null ? null : hat.id(),
 			rotationX, rotationY, getX(), getY(), getRight(), getBottom(), scale, null));
