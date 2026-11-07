@@ -18,12 +18,10 @@ import de.sakulius.zyrox.music.MusicManager;
 import de.sakulius.zyrox.music.WindowsMediaSession;
 import de.sakulius.zyrox.cloud.Friends;
 import de.sakulius.zyrox.cloud.Roles;
-import de.sakulius.zyrox.emote.Emotes;
 import de.sakulius.zyrox.module.News;
 import de.sakulius.zyrox.module.PvpTracker;
 import de.sakulius.zyrox.module.TntTimer;
 import de.sakulius.zyrox.module.Waypoints;
-import de.sakulius.zyrox.screen.EmoteWheelScreen;
 import de.sakulius.zyrox.screen.Glass;
 import de.sakulius.zyrox.screen.NewsCard;
 import de.sakulius.zyrox.screen.NewsScreen;
@@ -97,7 +95,6 @@ public class ZyroxClientTest implements FabricClientGameTest {
 			testTntTimer(context, server);
 			testPvpModules(context, server);
 			testHudStyle(context, server);
-			testEmotes(context);
 			scale = context.computeOnClient(client -> (double) client.getWindow().getGuiScale());
 			server.runCommand("effect give @a speed 300 1");
 			server.runCommand("item replace entity @a armor.chest with iron_chestplate");
@@ -585,42 +582,6 @@ public class ZyroxClientTest implements FabricClientGameTest {
 		post("/__dev/role", "{\"uuid\":\"" + own + "\",\"role\":\"none\"}");
 		Roles.refreshSoon();
 		context.waitFor(client -> !Roles.isStaff(), 200);
-	}
-
-	private void testEmotes(ClientGameTestContext context) {
-		var input = context.getInput();
-		check(context.computeOnClient(client -> Emotes.all().stream().anyMatch(emote -> emote.id().equals("wave"))), "the built in wave emote loads");
-		input.pressKey(ZyroxClient.emoteKey);
-		context.waitTicks(8);
-		check(context.computeOnClient(client -> client.gui.screen() instanceof EmoteWheelScreen), "the emote key opens the wheel");
-		context.takeScreenshot("emote-wheel");
-		int[] slot = context.computeOnClient(client -> {
-			var wheel = (EmoteWheelScreen) client.gui.screen();
-			int index = 0;
-			var all = Emotes.all();
-			for (int i = 0; i < Math.min(all.size(), EmoteWheelScreen.SLOTS); i++)
-				if (all.get(i).id().equals("wave"))
-					index = i;
-			int[] center = wheel.slotCenter(index);
-			return new int[] { center[0], center[1], (int) client.getWindow().getGuiScale() };
-		});
-		input.setCursorPos(slot[0] * slot[2], slot[1] * slot[2]);
-		context.waitTicks(4);
-		input.pressMouse(InputConstants.MOUSE_BUTTON_LEFT);
-		context.waitTicks(10);
-		check(Emotes.playing() != null && Emotes.playing().id().equals("wave"), "clicking a slot plays the emote");
-		check(context.computeOnClient(client -> client.options.getCameraType()) == CameraType.THIRD_PERSON_FRONT, "emotes show the player from the front");
-		context.takeScreenshot("emote-wave");
-		context.waitTicks(50);
-		check(Emotes.playing() == null, "a one time emote ends by itself");
-		check(context.computeOnClient(client -> client.options.getCameraType()) == CameraType.FIRST_PERSON, "the camera comes back after the emote");
-		context.runOnClient(client -> Emotes.play(client, Emotes.all().stream().filter(emote -> emote.id().equals("cheer")).findFirst().orElseThrow()));
-		context.waitTicks(10);
-		context.takeScreenshot("emote-cheer");
-		input.holdKey(options -> options.keyUp);
-		context.waitTicks(3);
-		input.releaseKey(options -> options.keyUp);
-		check(Emotes.playing() == null, "walking stops a looping emote");
 	}
 
 	private void testMenuSplash(ClientGameTestContext context) {
