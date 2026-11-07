@@ -398,7 +398,9 @@ public class ZyroxClientTest implements FabricClientGameTest {
 		var pvp = Modules.ALL.stream().filter(module -> module.category == Module.Category.PVP).toList();
 		check(pvp.size() == 7, "the PvP page has seven modules, got " + pvp.size());
 		pvp.forEach(module -> module.enabled = true);
-		server.runCommand("execute at @a run summon zombie ^ ^ ^2.5 {NoAI:1b,Silent:1b,Health:20f}");
+		server.runCommand("time set 1000");
+		server.runCommand("kill @e[type=!player]");
+		server.runCommand("execute at @a run summon husk ^ ^ ^2.5 {NoAI:1b,Silent:1b,Health:20f}");
 		server.runCommand("give @a ender_pearl 16");
 		server.runCommand("give @a totem_of_undying 2");
 		server.runCommand("give @a golden_apple 5");
@@ -419,7 +421,7 @@ public class ZyroxClientTest implements FabricClientGameTest {
 		check(PvpTracker.combo() == 0, "getting hit ends the combo, got " + PvpTracker.combo());
 		context.takeScreenshot("pvp-warnings");
 		server.runCommand("effect give @a instant_health 1 5");
-		server.runCommand("kill @e[type=zombie]");
+		server.runCommand("kill @e[type=husk]");
 		server.runCommand("clear @a ender_pearl");
 		server.runCommand("clear @a totem_of_undying");
 		server.runCommand("clear @a golden_apple");
