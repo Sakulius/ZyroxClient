@@ -170,3 +170,143 @@ test("bad input is refused", async () => {
 	assert.equal((await s.call("GET", `/v1/loadouts?uuids=${Array.from({ length: 51 }, (_, i) => i.toString(16).padStart(32, "0")).join(",")}`)).status, 400);
 	assert.equal((await s.call("GET", "/nope")).status, 404);
 });
+
+test("two players become friends after a request and an accept", async () => {
+	const s = setup();
+	const me = await s.signIn(PLAYER);
+	const friend = await s.signIn(OTHER);
+	assert.equal((await (await s.call("POST", "/v1/friends/request", { uuid: OTHER }, me)).json()).status, "sent");
+	let mine = await (await s.call("GET", "/v1/friends", undefined, me)).json();
+	assert.deepEqual(mine.outgoing.map(entry => entry.uuid), [OTHER]);
+	let theirs = await (await s.call("GET", "/v1/friends", undefined, friend)).json();
+	assert.deepEqual(theirs.incoming.map(entry => entry.uuid), [PLAYER]);
+	assert.equal((await s.call("POST", "/v1/friends/accept", { uuid: PLAYER }, friend)).status, 200);
+	mine = await (await s.call("GET", "/v1/friends", undefined, me)).json();
+	assert.deepEqual(mine.friends.map(entry => entry.uuid), [OTHER]);
+	assert.equal(mine.outgoing.length, 0);
+	theirs = await (await s.call("GET", "/v1/friends", undefined, friend)).json();
+	assert.deepEqual(theirs.friends.map(entry => entry.uuid), [PLAYER]);
+});
+
+test("asking each other makes friends right away", async () => {
+	const s = setup();
+	const me = await s.signIn(PLAYER);
+	const friend = await s.signIn(OTHER);
+	await s.call("POST", "/v1/friends/request", { uuid: OTHER }, me);
+	assert.equal((await (await s.call("POST", "/v1/friends/request", { uuid: PLAYER }, friend)).json()).status, "friends");
+});
+
+test("friends see each other online with the server", async () => {
+	const s = setup();
+	const me = await s.signIn(PLAYER);
+	const friend = await s.signIn(OTHER);
+	await s.call("POST", "/v1/friends/request", { uuid: OTHER }, me);
+	await s.call("POST", "/v1/friends/accept", { uuid: PLAYER }, friend);
+	assert.equal((await s.call("PUT", "/v1/presence", { name: "Friendly", server: "play.example.net" }, friend)).status, 200);
+	let list = await (await s.call("GET", "/v1/friends", undefined, me)).json();
+	assert.deepEqual(list.friends[0], { uuid: OTHER, name: "Friendly", online: true, server: "play.example.net" });
+	s.now += 7 * 60;
+	list = await (await s.call("GET", "/v1/friends", undefined, me)).json();
+	assert.equal(list.friends[0].online, false);
+	assert.equal(list.friends[0].server, "");
+});
+
+test("going offline hides a player at once", async () => {
+	const s = setup();
+	const me = await s.signIn(PLAYER);
+	const friend = await s.signIn(OTHER);
+	await s.call("POST", "/v1/friends/request", { uuid: OTHER }, me);
+	await s.call("POST", "/v1/friends/accept", { uuid: PLAYER }, friend);
+	await s.call("PUT", "/v1/presence", { name: "Friendly", server: "" }, friend);
+	await s.call("DELETE", "/v1/presence", undefined, friend);
+	const list = await (await s.call("GET", "/v1/friends", undefined, me)).json();
+	assert.equal(list.friends[0].online, false);
+});
+
+test("strangers never see a server", async () => {
+	const s = setup();
+	const me = await s.signIn(PLAYER);
+	const stranger = await s.signIn(OTHER);
+	await s.call("PUT", "/v1/presence", { name: "Stranger", server: "secret.example.net" }, stranger);
+	const list = await (await s.call("GET", "/v1/friends", undefined, me)).json();
+	assert.equal(JSON.stringify(list).includes("secret"), false);
+});
+
+test("removing ends the friendship for both", async () => {
+	const s = setup();
+	const me = await s.signIn(PLAYER);
+	const friend = await s.signIn(OTHER);
+	await s.call("POST", "/v1/friends/request", { uuid: OTHER }, me);
+	await s.call("POST", "/v1/friends/accept", { uuid: PLAYER }, friend);
+	await s.call("POST", "/v1/friends/remove", { uuid: PLAYER }, friend);
+	const list = await (await s.call("GET", "/v1/friends", undefined, me)).json();
+	assert.equal(list.friends.length, 0);
+});
+
+test("friend requests need a sign in and a real uuid", async () => {
+	const s = setup();
+	const me = await s.signIn(PLAYER);
+	assert.equal((await s.call("POST", "/v1/friends/request", { uuid: OTHER })).status, 401);
+	assert.equal((await s.call("POST", "/v1/friends/request", { uuid: "nope" }, me)).status, 400);
+	assert.equal((await s.call("POST", "/v1/friends/request", { uuid: PLAYER }, me)).status, 400);
+	assert.equal((await s.call("POST", "/v1/friends/accept", { uuid: OTHER }, me)).status, 404);
+});
+
+test("presence rejects bad names and servers and is rate limited", async () => {
+	const s = setup();
+	const me = await s.signIn(PLAYER);
+	assert.equal((await s.call("PUT", "/v1/presence", { name: "bad name!", server: "" }, me)).status, 400);
+	assert.equal((await s.call("PUT", "/v1/presence", { name: "Okay", server: "x".repeat(101) }, me)).status, 400);
+	assert.equal((await s.call("PUT", "/v1/presence", { name: "Okay", server: "a" }, me)).status, 200);
+	assert.equal((await s.call("PUT", "/v1/presence", { name: "Okay", server: "a" }, me)).status, 429);
+	assert.equal((await s.call("PUT", "/v1/presence", { name: "Okay", server: "b" }, me)).status, 200);
+});
+
+const THIRD = "00112233445566778899aabbccddeeff";
+const makeOwner = (s, uuid = PLAYER) => s.env.DB.prepare("INSERT OR REPLACE INTO roles (uuid, role, name) VALUES (?, 'owner', 'Boss')").bind(uuid).run();
+
+test("Sakulius is the owner from the start", async () => {
+	const s = setup();
+	const row = await s.env.DB.prepare("SELECT role FROM roles WHERE uuid = ?").bind("a73db1899b88423998a6ba21c3fcef41").first();
+	assert.equal(row.role, "owner");
+});
+
+test("the owner gives and takes roles and everyone sees them", async () => {
+	const s = setup();
+	await makeOwner(s);
+	const owner = await s.signIn(PLAYER);
+	assert.equal((await s.call("POST", "/v1/roles", { uuid: OTHER, name: "Helper", role: "staff" }, owner)).status, 200);
+	assert.equal((await s.call("POST", "/v1/roles", { uuid: THIRD, role: "tester" }, owner)).status, 200);
+	const seen = await (await s.call("GET", `/v1/loadouts?uuids=${OTHER},${THIRD},${PLAYER}`)).json();
+	assert.deepEqual(seen.roles, { [OTHER]: "staff", [THIRD]: "tester", [PLAYER]: "owner" });
+	const team = await (await s.call("GET", "/v1/team", undefined, owner)).json();
+	assert.equal(team.role, "owner");
+	assert.deepEqual(team.team.map(entry => entry.role), ["owner", "owner", "staff", "tester"]);
+	assert.equal((await s.call("POST", "/v1/roles", { uuid: OTHER, role: "" }, owner)).status, 200);
+	assert.deepEqual((await (await s.call("GET", `/v1/loadouts?uuids=${OTHER}`)).json()).roles, {});
+});
+
+test("only the owner can give roles", async () => {
+	const s = setup();
+	await makeOwner(s);
+	const owner = await s.signIn(PLAYER);
+	await s.call("POST", "/v1/roles", { uuid: OTHER, role: "staff" }, owner);
+	const staff = await s.signIn(OTHER);
+	assert.equal((await s.call("POST", "/v1/roles", { uuid: THIRD, role: "tester" }, staff)).status, 403);
+	assert.equal((await s.call("POST", "/v1/roles", { uuid: OTHER, role: "owner" }, owner)).status, 400);
+	assert.equal((await s.call("POST", "/v1/roles", { uuid: PLAYER, role: "" }, owner)).status, 403);
+	assert.equal((await s.call("POST", "/v1/roles", { uuid: THIRD, role: "tester" })).status, 401);
+	const stranger = await s.signIn(THIRD);
+	assert.equal((await s.call("POST", "/v1/roles", { uuid: THIRD, role: "staff" }, stranger)).status, 403);
+	const view = await (await s.call("GET", "/v1/team", undefined, stranger)).json();
+	assert.deepEqual(view, { role: "", team: [] });
+	assert.equal((await (await s.call("GET", "/v1/team", undefined, staff)).json()).team.length, 3);
+});
+
+test("another owner cannot be demoted", async () => {
+	const s = setup();
+	await makeOwner(s);
+	await makeOwner(s, OTHER);
+	const owner = await s.signIn(PLAYER);
+	assert.equal((await s.call("POST", "/v1/roles", { uuid: OTHER, role: "tester" }, owner)).status, 403);
+});

@@ -9,7 +9,7 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.network.chat.Component;
 
-public class WaypointNameScreen extends Screen {
+public class NameScreen extends Screen {
 	private static final int CARD_WIDTH = 220;
 	private static final int CARD_HEIGHT = 70;
 	private static final int MAX_NAME = 32;
@@ -24,7 +24,7 @@ public class WaypointNameScreen extends Screen {
 	private final Consumer<String> done;
 	private EditBox input;
 
-	public WaypointNameScreen(Screen parent, String title, String startName, Consumer<String> done) {
+	public NameScreen(Screen parent, String title, String startName, Consumer<String> done) {
 		super(Component.literal(title));
 		this.parent = parent;
 		this.title = title;

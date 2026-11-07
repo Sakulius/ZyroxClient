@@ -93,19 +93,59 @@ def write_cape(name, art):
     image.save(path)
 
 
-def write_badge():
-    size = 18
-    scale = 8
-    big = Image.new("RGBA", (size * scale, size * scale), (0, 0, 0, 0))
+def badge_canvas(color):
+    size = 18 * 8
+    big = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     draw = ImageDraw.Draw(big)
-    draw.rounded_rectangle((0, 0, size * scale - 1, size * scale - 1), 5 * scale, fill=(66, 150, 255, 255))
-    pad = 4 * scale
-    far = size * scale - pad
-    stroke = 2 * scale + 4
-    draw.line([(pad, pad + stroke // 2), (far, pad + stroke // 2), (pad, far - stroke // 2), (far, far - stroke // 2)], fill=(255, 255, 255, 255), width=stroke, joint="curve")
-    big.resize((size, size), Image.LANCZOS).save(ASSETS / "textures/gui/badge.png")
-    font = {"providers": [{"type": "bitmap", "file": "zyrox:gui/badge.png", "height": 9, "ascent": 8, "chars": [""]}]}
-    (ASSETS / "font/badge.json").write_text(json.dumps(font), encoding="ascii")
+    draw.rounded_rectangle((0, 0, size - 1, size - 1), 40, fill=color)
+    return big, draw
+
+
+def z_glyph(draw):
+    pad = 32
+    far = 144 - pad
+    stroke = 20
+    draw.line([(pad, pad + stroke // 2), (far, pad + stroke // 2), (pad, far - stroke // 2), (far, far - stroke // 2)], fill=WHITE, width=stroke, joint="curve")
+
+
+def crown_glyph(draw):
+    draw.polygon([(28, 104), (28, 46), (52, 72), (72, 36), (92, 72), (116, 46), (116, 104)], fill=WHITE)
+    draw.rectangle((28, 108, 116, 118), fill=WHITE)
+
+
+def shield_glyph(draw):
+    draw.polygon([(72, 24), (116, 38), (112, 82), (72, 122), (32, 82), (28, 38)], fill=WHITE)
+    draw.polygon([(72, 42), (98, 50), (96, 78), (72, 102)], fill=(255, 255, 255, 0))
+
+
+def flask_glyph(draw):
+    draw.rectangle((58, 22, 86, 30), fill=WHITE)
+    draw.rectangle((62, 30, 82, 62), fill=WHITE)
+    draw.polygon([(62, 60), (82, 60), (118, 116), (26, 116)], fill=WHITE)
+    draw.ellipse((50, 86, 64, 100), fill=(0, 0, 0, 0))
+
+
+BADGES = {
+    "badge": ((66, 150, 255, 255), z_glyph, ""),
+    "badge_owner": ((232, 52, 62, 255), crown_glyph, ""),
+    "badge_staff": ((240, 120, 36, 255), shield_glyph, ""),
+    "badge_tester": ((36, 186, 132, 255), flask_glyph, ""),
+}
+
+
+def write_badge():
+    providers = []
+    for name, (color, glyph, char) in BADGES.items():
+        big, draw = badge_canvas(color)
+        glyph(draw)
+        big.resize((18, 18), Image.LANCZOS).save(ASSETS / f"textures/gui/{name}.png")
+        providers.append({"type": "bitmap", "file": f"zyrox:gui/{name}.png", "height": 9, "ascent": 8, "chars": [char]})
+    (ASSETS / "font/badge.json").write_text(json.dumps({"providers": providers}), encoding="ascii")
+
+
+def staff_shape(draw, s):
+    draw.polygon([(64 * s, 10 * s), (112 * s, 26 * s), (106 * s, 76 * s), (64 * s, 120 * s), (22 * s, 76 * s), (16 * s, 26 * s)], fill=WHITE)
+    draw.polygon([(64 * s, 30 * s), (92 * s, 40 * s), (88 * s, 74 * s), (64 * s, 100 * s)], fill=(0, 0, 0, 0))
 
 
 def write_logo():
@@ -277,7 +317,16 @@ def low_health_shape(draw, s):
     draw.line([(64 * s, 26 * s), (52 * s, 56 * s), (74 * s, 66 * s), (60 * s, 112 * s)], fill=CLEAR, width=7 * s)
 
 
+def friends_shape(draw, s):
+    draw.ellipse(box(s, 20, 22, 60, 62), fill=WHITE)
+    draw.pieslice(box(s, 6, 70, 74, 138), 180, 360, fill=WHITE)
+    draw.ellipse(box(s, 72, 30, 106, 64), fill=WHITE)
+    draw.pieslice(box(s, 62, 74, 120, 132), 180, 360, fill=WHITE)
+
+
 (ASSETS / "textures/gui").mkdir(parents=True, exist_ok=True)
+write_icon("friends", friends_shape)
+write_icon("staff", staff_shape)
 (ASSETS / "textures/icon/pvp").mkdir(parents=True, exist_ok=True)
 for pvp, shape in {"combo": combo_shape, "reach": reach_shape, "item_counter": items_shape, "block_counter": blocks_shape, "armor_warning": armor_warning_shape, "low_health": low_health_shape}.items():
     write_icon("pvp/" + pvp, shape)

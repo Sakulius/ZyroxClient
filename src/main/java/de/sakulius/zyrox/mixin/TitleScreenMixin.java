@@ -92,7 +92,8 @@ public abstract class TitleScreenMixin extends Screen {
 		addRenderableWidget(new NewsCard(this, left, top, cardWidth, cardHeight));
 		int buttonsY = top + cardHeight + ZyroxTitle.SIDE_GAP;
 		int half = (cardWidth - ZyroxTitle.SIDE_GAP) / 2;
-		addRenderableWidget(new ZyroxMenuButton(Component.literal("Cosmetics"), left, buttonsY, cardWidth, ZyroxTitle.BUTTON_HEIGHT, input -> minecraft.setScreen(ZyroxScreen.cosmeticsFrom(this)), true));
+		addRenderableWidget(new ZyroxMenuButton(Component.literal("Friends"), left, buttonsY, half, ZyroxTitle.BUTTON_HEIGHT, input -> minecraft.setScreen(ZyroxScreen.pageFrom(this, "friends")), true));
+		addRenderableWidget(new ZyroxMenuButton(Component.literal("Cosmetics"), left + half + ZyroxTitle.SIDE_GAP, buttonsY, cardWidth - half - ZyroxTitle.SIDE_GAP, ZyroxTitle.BUTTON_HEIGHT, input -> minecraft.setScreen(ZyroxScreen.cosmeticsFrom(this)), true));
 		int modelTop = buttonsY + ZyroxTitle.BUTTON_HEIGHT + ZyroxTitle.SIDE_GAP;
 		int modelHeight = Math.min(height - ZyroxTitle.MODEL_BOTTOM - modelTop, Math.round(height * ZyroxTitle.MODEL_SHARE));
 		if (modelHeight >= ZyroxTitle.MODEL_MIN_HEIGHT) {

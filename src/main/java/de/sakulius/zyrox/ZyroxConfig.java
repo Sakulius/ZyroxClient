@@ -4,6 +4,7 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
+import de.sakulius.zyrox.cloud.Friends;
 import de.sakulius.zyrox.module.Cosmetics;
 import de.sakulius.zyrox.module.HudModule;
 import de.sakulius.zyrox.module.Modules;
@@ -67,6 +68,8 @@ public final class ZyroxConfig {
 				HudStyle.scoreboard = boolOr(settings, "hudScoreboard", HudStyle.scoreboard);
 				HudStyle.hideScores = boolOr(settings, "hudHideScores", HudStyle.hideScores);
 				HudStyle.hotbar = boolOr(settings, "hudHotbar", HudStyle.hotbar);
+				Friends.appearOnline = boolOr(settings, "appearOnline", Friends.appearOnline);
+				Friends.shareServer = boolOr(settings, "shareServer", Friends.shareServer);
 				MusicManager.onlySpotify = boolOr(settings, "onlySpotify", MusicManager.onlySpotify);
 				MusicManager.karaoke = boolOr(settings, "karaoke", MusicManager.karaoke);
 				MusicManager.offsetMs = intOr(settings, "lyricsOffsetMs", MusicManager.offsetMs);
@@ -114,6 +117,8 @@ public final class ZyroxConfig {
 		settings.addProperty("hudScoreboard", HudStyle.scoreboard);
 		settings.addProperty("hudHideScores", HudStyle.hideScores);
 		settings.addProperty("hudHotbar", HudStyle.hotbar);
+		settings.addProperty("appearOnline", Friends.appearOnline);
+		settings.addProperty("shareServer", Friends.shareServer);
 		settings.addProperty("onlySpotify", MusicManager.onlySpotify);
 		settings.addProperty("karaoke", MusicManager.karaoke);
 		settings.addProperty("lyricsOffsetMs", MusicManager.offsetMs);

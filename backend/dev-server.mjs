@@ -22,6 +22,12 @@ createServer(async (req, res) => {
 		res.end("{}");
 		return;
 	}
+	if (req.url === "/__dev/role") {
+		const seed = JSON.parse(body.toString());
+		await env.DB.prepare("INSERT OR REPLACE INTO roles (uuid, role, name) VALUES (?, ?, ?)").bind(seed.uuid, seed.role, seed.name ?? "").run();
+		res.end("{}");
+		return;
+	}
 	const answer = await handle(new Request(url, {
 		method: req.method,
 		headers: req.headers,

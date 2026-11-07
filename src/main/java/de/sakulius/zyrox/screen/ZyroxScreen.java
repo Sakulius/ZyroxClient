@@ -6,6 +6,8 @@ import de.sakulius.zyrox.ZyroxClient;
 import de.sakulius.zyrox.ZyroxConfig;
 import de.sakulius.zyrox.ZyroxTheme;
 import de.sakulius.zyrox.cloud.CloudCosmetics;
+import de.sakulius.zyrox.cloud.Friends;
+import de.sakulius.zyrox.cloud.Roles;
 import de.sakulius.zyrox.module.Cosmetics;
 import de.sakulius.zyrox.module.HudModule;
 import de.sakulius.zyrox.module.Module;
@@ -21,12 +23,16 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.IntConsumer;
 import java.util.function.IntSupplier;
 import java.util.function.Supplier;
+import com.mojang.authlib.GameProfile;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.components.PlayerFaceRenderer;
+import net.minecraft.world.entity.player.PlayerSkin;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
@@ -101,6 +107,9 @@ public class ZyroxScreen extends Screen {
 	private static final List<String> HUD_TABS = List.of("Elements", "Style");
 	private static final int LYRICS_OFFSET_MS = 250;
 	private static final int WAYPOINT_BUTTONS = 66;
+	private static final int FRIEND_BUTTON = 44;
+	private static final int FRIEND_BUTTONS = FRIEND_BUTTON * 2 + 12;
+	private static final int ONLINE = 0xFF57E05B;
 	private static final int WAYPOINT_EDIT = 40;
 	private static final int WAYPOINT_DELETE = 16;
 
@@ -157,10 +166,14 @@ public class ZyroxScreen extends Screen {
 	private PlayerPreviewWidget preview;
 
 	public static ZyroxScreen cosmeticsFrom(Screen parent) {
+		return pageFrom(parent, "cosmetics");
+	}
+
+	public static ZyroxScreen pageFrom(Screen parent, String page) {
 		var screen = new ZyroxScreen();
 		screen.parent = parent;
 		for (int i = 0; i < screen.pages.size(); i++)
-			if (screen.pages.get(i).id().equals("cosmetics"))
+			if (screen.pages.get(i).id().equals(page))
 				screen.selected = i;
 		screen.position = screen.selected;
 		screen.panel = screen.pages.get(screen.selected);
@@ -174,14 +187,18 @@ public class ZyroxScreen extends Screen {
 
 	public ZyroxScreen() {
 		super(Component.literal("Zyrox Client"));
-		pages = List.of(
+		var list = new ArrayList<>(List.of(
 			new Page("hud", "HUD", "Widgets and layout", icon("hud"), 0f, this::hudRows),
 			new Page("cosmetics", "Cosmetics", "Capes, hats and auras", icon("cosmetics"), COSMETICS_ORBIT, this::cosmeticRows),
 			new Page("music", "Music", "Lyrics and controls", icon("music"), 0f, this::musicRows),
 			new Page("utility", "Utility", "Zoom and helpers", icon("utility"), 0f, this::utilityRows),
 			new Page("pvp", "PvP", "Fight helpers", icon("pvp"), 0f, this::pvpRows),
 			new Page("waypoints", "Waypoints", "Mark your places", icon("waypoints"), 0f, this::waypointRows),
-			new Page("settings", "Settings", "Theme and camera", icon("settings"), 0f, this::settingRows));
+			new Page("friends", "Friends", "Online and joining", icon("friends"), 0f, this::friendRows),
+			new Page("settings", "Settings", "Theme and camera", icon("settings"), 0f, this::settingRows)));
+		if (Roles.isStaff())
+			list.add(list.size() - 1, new Page("staff", "Staff", "Team and roles", icon("staff"), 0f, this::staffRows));
+		pages = List.copyOf(list);
 		selected = 1;
 		position = 1;
 	}
@@ -739,12 +756,199 @@ public class ZyroxScreen extends Screen {
 			rows.add(note("Join a world to use waypoints."));
 			return rows;
 		}
-		rows.add(button("add-waypoint", "Add waypoint here", () -> minecraft.setScreen(new WaypointNameScreen(this, "New waypoint", Waypoints.nextName(minecraft), name -> Waypoints.add(minecraft, name)))));
+		rows.add(button("add-waypoint", "Add waypoint here", () -> minecraft.setScreen(new NameScreen(this, "New waypoint", Waypoints.nextName(minecraft), name -> Waypoints.add(minecraft, name)))));
 		var list = Waypoints.here(minecraft);
 		for (int i = 0; i < list.size(); i++)
 			rows.add(waypointRow("waypoint-" + i, list.get(i)));
 		rows.add(note("Press B in game for a new waypoint."));
 		return rows;
+	}
+
+	private final Map<UUID, Supplier<PlayerSkin>> faces = new HashMap<>();
+
+	private Row heading(String id, String text) {
+		return new Row(id, 18) {
+			@Override
+			void draw(GuiGraphics graphics, int x, int y, int w, int mouseX, int mouseY, float alpha) {
+				Type.SEMIBOLD.draw(graphics, font, text, x + 8, y + 7, Fx.alpha(TEXT, alpha));
+			}
+
+			@Override
+			void click(double mouseX, int x, int y, int w) {
+			}
+		};
+	}
+
+	private void face(GuiGraphics graphics, UUID id, String name, int x, int y, int size, float alpha) {
+		var skin = faces.computeIfAbsent(id, key -> minecraft.getSkinManager().createLookup(new GameProfile(key, name.isEmpty() ? "Player" : name), false));
+		PlayerFaceRenderer.draw(graphics, skin.get(), x, y, size, Fx.alpha(TEXT, alpha));
+	}
+
+	private List<Row> friendRows() {
+		Friends.watch();
+		var rows = new ArrayList<Row>();
+		if (!Friends.available()) {
+			rows.add(note("The Zyrox server is offline right now."));
+			return rows;
+		}
+		rows.add(button("add-friend", "Add friend", () -> minecraft.setScreen(new NameScreen(this, "Add a friend by Minecraft name", "", name -> Friends.add(minecraft, name)))));
+		if (!Friends.message().isEmpty())
+			rows.add(note(Friends.message()));
+		var incoming = Friends.incoming();
+		if (!incoming.isEmpty()) {
+			rows.add(heading("requests", "Requests (" + incoming.size() + ")"));
+			for (int i = 0; i < incoming.size(); i++)
+				rows.add(requestRow("request-" + i, incoming.get(i)));
+		}
+		var friends = Friends.friends();
+		long online = friends.stream().filter(Friends.Friend::online).count();
+		rows.add(heading("friends-heading", "Friends (" + online + " of " + friends.size() + " online)"));
+		if (!Friends.loaded())
+			rows.add(note(Friends.failed() ? "Could not load your friends." : "Loading..."));
+		else if (friends.isEmpty())
+			rows.add(note("No friends yet. Add someone who uses Zyrox."));
+		for (int i = 0; i < friends.size(); i++)
+			rows.add(friendRow("friend-" + i, friends.get(i)));
+		var outgoing = Friends.outgoing();
+		if (!outgoing.isEmpty()) {
+			rows.add(heading("sent", "Sent requests"));
+			for (int i = 0; i < outgoing.size(); i++)
+				rows.add(sentRow("sent-" + i, outgoing.get(i)));
+		}
+		rows.add(toggle("appear-online", "Appear online", "Friends see when you play", () -> Friends.appearOnline, on -> Friends.appearOnline = on));
+		rows.add(toggle("share-server", "Share my server", "Friends can join you", () -> Friends.shareServer, on -> Friends.shareServer = on));
+		return rows;
+	}
+
+	private Row requestRow(String id, Friends.Request request) {
+		return new Row(id, ROW_HEIGHT) {
+			@Override
+			void draw(GuiGraphics graphics, int x, int y, int w, int mouseX, int mouseY, float alpha) {
+				if (inside(mouseX, mouseY, x, y, w, height))
+					Draw.roundRect(graphics, x, y, w, height, ROW_RADIUS, Fx.alpha(HOVER, alpha));
+				face(graphics, request.id(), request.name(), x + 7, y + 7, 16, alpha);
+				var name = request.name().isEmpty() ? "Unknown player" : request.name();
+				Type.SEMIBOLD.draw(graphics, font, fitted(name, w - FRIEND_BUTTONS - 34), x + 29, y + 11, Fx.alpha(TEXT, alpha));
+				smallButton(graphics, x + w - FRIEND_BUTTONS, y + 7, FRIEND_BUTTON, "Accept", ZyroxTheme.accent(), mouseX, mouseY, alpha);
+				smallButton(graphics, x + w - FRIEND_BUTTON - 6, y + 7, FRIEND_BUTTON, "Decline", 0x1EFFFFFF, mouseX, mouseY, alpha);
+			}
+
+			@Override
+			void click(double mouseX, int x, int y, int w) {
+				if (mouseX >= x + w - FRIEND_BUTTONS && mouseX < x + w - FRIEND_BUTTONS + FRIEND_BUTTON)
+					Friends.accept(minecraft, request);
+				else if (mouseX >= x + w - FRIEND_BUTTON - 6 && mouseX < x + w - 6)
+					Friends.remove(minecraft, request.id(), request.name());
+				else
+					return;
+				playClick(1.2f);
+			}
+		};
+	}
+
+	private Row friendRow(String id, Friends.Friend friend) {
+		return new Row(id, ROW_HEIGHT) {
+			@Override
+			void draw(GuiGraphics graphics, int x, int y, int w, int mouseX, int mouseY, float alpha) {
+				if (inside(mouseX, mouseY, x, y, w, height))
+					Draw.roundRect(graphics, x, y, w, height, ROW_RADIUS, Fx.alpha(HOVER, alpha));
+				face(graphics, friend.id(), friend.name(), x + 7, y + 7, 16, friend.online() ? alpha : alpha * 0.45f);
+				Draw.roundRect(graphics, x + 19, y + 19, 6, 6, 3f, Fx.alpha(friend.online() ? ONLINE : 0xFF6F747E, alpha));
+				boolean join = Friends.canJoin(minecraft, friend);
+				int textWidth = w - (join ? FRIEND_BUTTONS : FRIEND_BUTTON) - 40;
+				var name = friend.name().isEmpty() ? "Unknown player" : friend.name();
+				Type.SEMIBOLD.draw(graphics, font, fitted(name, textWidth), x + 31, y + 6, Fx.alpha(friend.online() ? TEXT : MUTED, alpha));
+				var status = !friend.online() ? "Offline" : friend.server().isEmpty() ? "Online" : "On " + friend.server();
+				Type.REGULAR.draw(graphics, font, fitted(status, textWidth), x + 31, y + 17, Fx.alpha(MUTED, alpha));
+				if (join)
+					smallButton(graphics, x + w - FRIEND_BUTTONS, y + 7, FRIEND_BUTTON, "Join", ZyroxTheme.accent(), mouseX, mouseY, alpha);
+				Type.REGULAR.centered(graphics, font, "x", x + w - 12, y + 11, Fx.alpha(0xFFFF6B6B, alpha));
+			}
+
+			@Override
+			void click(double mouseX, int x, int y, int w) {
+				if (mouseX >= x + w - 22) {
+					Friends.remove(minecraft, friend.id(), friend.name());
+				} else if (Friends.canJoin(minecraft, friend) && mouseX >= x + w - FRIEND_BUTTONS && mouseX < x + w - FRIEND_BUTTONS + FRIEND_BUTTON) {
+					onClose();
+					Friends.join(minecraft, friend);
+				} else {
+					return;
+				}
+				playClick(1.2f);
+			}
+		};
+	}
+
+	private Row sentRow(String id, Friends.Request request) {
+		return new Row(id, ROW_HEIGHT) {
+			@Override
+			void draw(GuiGraphics graphics, int x, int y, int w, int mouseX, int mouseY, float alpha) {
+				face(graphics, request.id(), request.name(), x + 7, y + 7, 16, alpha * 0.6f);
+				var name = request.name().isEmpty() ? "Waiting for an answer" : request.name();
+				Type.REGULAR.draw(graphics, font, fitted(name, w - FRIEND_BUTTON - 40), x + 29, y + 11, Fx.alpha(MUTED, alpha));
+				smallButton(graphics, x + w - FRIEND_BUTTON - 6, y + 7, FRIEND_BUTTON, "Cancel", 0x1EFFFFFF, mouseX, mouseY, alpha);
+			}
+
+			@Override
+			void click(double mouseX, int x, int y, int w) {
+				if (mouseX >= x + w - FRIEND_BUTTON - 6 && mouseX < x + w - 6) {
+					Friends.remove(minecraft, request.id(), request.name());
+					playClick(1.1f);
+				}
+			}
+		};
+	}
+
+	private List<Row> staffRows() {
+		Roles.watch();
+		var rows = new ArrayList<Row>();
+		var own = Roles.own();
+		rows.add(heading("staff-role", own == null ? "You are not in the team" : "You are " + own.label));
+		if (Roles.isOwner()) {
+			rows.add(button("add-staff", "Add staff", () -> minecraft.setScreen(new NameScreen(this, "Add staff by Minecraft name", "", name -> Roles.set(minecraft, name, Roles.Role.STAFF, null)))));
+			rows.add(button("add-tester", "Add tester", () -> minecraft.setScreen(new NameScreen(this, "Add a tester by Minecraft name", "", name -> Roles.set(minecraft, name, Roles.Role.TESTER, null)))));
+		}
+		if (!Roles.message().isEmpty())
+			rows.add(note(Roles.message()));
+		var team = Roles.team();
+		rows.add(heading("team", "Team (" + team.size() + ")"));
+		for (int i = 0; i < team.size(); i++)
+			rows.add(memberRow("member-" + i, team.get(i)));
+		if (Roles.isOwner())
+			rows.add(note("In chat: /zyrox role add <name> staff"));
+		return rows;
+	}
+
+	private Row memberRow(String id, Roles.Member member) {
+		boolean removable = Roles.isOwner() && member.role() != Roles.Role.OWNER && !member.name().isEmpty();
+		return new Row(id, ROW_HEIGHT) {
+			@Override
+			void draw(GuiGraphics graphics, int x, int y, int w, int mouseX, int mouseY, float alpha) {
+				if (inside(mouseX, mouseY, x, y, w, height))
+					Draw.roundRect(graphics, x, y, w, height, ROW_RADIUS, Fx.alpha(HOVER, alpha));
+				face(graphics, member.id(), member.name(), x + 7, y + 7, 16, alpha);
+				int textWidth = w - 60;
+				Type.SEMIBOLD.draw(graphics, font, fitted(member.name().isEmpty() ? "Unknown player" : member.name(), textWidth), x + 31, y + 6, Fx.alpha(TEXT, alpha));
+				Type.REGULAR.draw(graphics, font, member.role().label, x + 31, y + 17, Fx.alpha(member.role().color, alpha));
+				if (removable)
+					Type.REGULAR.centered(graphics, font, "x", x + w - 12, y + 11, Fx.alpha(0xFFFF6B6B, alpha));
+			}
+
+			@Override
+			void click(double mouseX, int x, int y, int w) {
+				if (removable && mouseX >= x + w - 22) {
+					Roles.set(minecraft, member.name(), null, null);
+					playClick(1.2f);
+				}
+			}
+		};
+	}
+
+	private void smallButton(GuiGraphics graphics, int x, int y, int w, String label, int color, int mouseX, int mouseY, float alpha) {
+		boolean hovered = inside(mouseX, mouseY, x, y, w, 16);
+		Draw.roundRect(graphics, x, y, w, 16, 5f, Fx.alpha(Fx.mix(color, TEXT, hovered ? 0.15f : 0f), alpha));
+		Type.SEMIBOLD.centered(graphics, font, label, x + w / 2, y + 4, Fx.alpha(TEXT, alpha));
 	}
 
 	private Row waypointRow(String id, Waypoints.Waypoint waypoint) {
@@ -768,7 +972,7 @@ public class ZyroxScreen extends Screen {
 				if (from <= WAYPOINT_DELETE) {
 					Waypoints.remove(minecraft, waypoint);
 				} else if (from <= WAYPOINT_EDIT) {
-					minecraft.setScreen(new WaypointNameScreen(ZyroxScreen.this, "Rename waypoint", waypoint.name, name -> {
+					minecraft.setScreen(new NameScreen(ZyroxScreen.this, "Rename waypoint", waypoint.name, name -> {
 						waypoint.name = name;
 						Waypoints.save();
 					}));
@@ -848,6 +1052,10 @@ public class ZyroxScreen extends Screen {
 
 	private int doneTop() {
 		return 30;
+	}
+
+	public List<String> pageIds() {
+		return pages.stream().map(Page::id).toList();
 	}
 
 	public String selectedId() {

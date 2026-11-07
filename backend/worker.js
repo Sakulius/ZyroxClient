@@ -8,6 +8,14 @@ const MAX_SLOTS = 16;
 const MAX_BODY_BYTES = 4096;
 const UUID = /^[0-9a-f]{32}$/;
 const NAME = /^[a-z][a-z0-9_-]{0,31}$/;
+const PLAYER_NAME = /^[A-Za-z0-9_]{1,16}$/;
+const SERVER = /^[\x20-\x7e]{0,100}$/;
+const ONLINE_SECONDS = 6 * 60;
+const MIN_PRESENCE_SECONDS = 20;
+const MAX_FRIENDS = 100;
+const MAX_OUTGOING = 50;
+const MAX_TEAM = 200;
+const GIVEN_ROLES = ["staff", "tester"];
 
 const encoder = new TextEncoder();
 
@@ -130,7 +138,11 @@ async function readLoadouts(url, env) {
 	const loadouts = {};
 	for (const row of results)
 		(loadouts[row.uuid] ??= {})[row.slot] = row.item;
-	return json({ loadouts }, 200, { "cache-control": "public, max-age=30" });
+	const team = await env.DB.prepare(`SELECT uuid, role FROM roles WHERE uuid IN (${marks})`).bind(...uuids).all();
+	const roles = {};
+	for (const row of team.results)
+		roles[row.uuid] = row.role;
+	return json({ loadouts, roles }, 200, { "cache-control": "public, max-age=30" });
 }
 
 async function writeLoadout(request, env, now) {
@@ -157,6 +169,161 @@ async function writeLoadout(request, env, now) {
 	return json({ saved: true });
 }
 
+async function playerBody(request) {
+	const body = await readJson(request);
+	return body && typeof body.uuid === "string" && UUID.test(body.uuid) ? body.uuid : null;
+}
+
+async function count(env, sql, value) {
+	return (await env.DB.prepare(sql).bind(value).first())?.total ?? 0;
+}
+
+async function areFriends(env, a, b) {
+	return (await env.DB.prepare("SELECT 1 AS yes FROM friends WHERE uuid = ? AND friend = ?").bind(a, b).first()) != null;
+}
+
+async function befriend(env, a, b) {
+	await env.DB.batch([
+		env.DB.prepare("DELETE FROM friend_requests WHERE (sender = ? AND receiver = ?) OR (sender = ? AND receiver = ?)").bind(a, b, b, a),
+		env.DB.prepare("INSERT OR IGNORE INTO friends (uuid, friend) VALUES (?, ?)").bind(a, b),
+		env.DB.prepare("INSERT OR IGNORE INTO friends (uuid, friend) VALUES (?, ?)").bind(b, a)
+	]);
+}
+
+async function sendRequest(request, env, now) {
+	const uuid = await tokenOwner(env, request, now);
+	if (!uuid)
+		return json({ error: "unauthorized" }, 401);
+	const target = await playerBody(request);
+	if (!target || target === uuid)
+		return json({ error: "bad_request" }, 400);
+	if (await areFriends(env, uuid, target))
+		return json({ status: "friends" });
+	const reverse = await env.DB.prepare("SELECT 1 AS yes FROM friend_requests WHERE sender = ? AND receiver = ?").bind(target, uuid).first();
+	if (reverse) {
+		if (await count(env, "SELECT COUNT(*) AS total FROM friends WHERE uuid = ?", uuid) >= MAX_FRIENDS)
+			return json({ error: "too_many_friends" }, 409);
+		await befriend(env, uuid, target);
+		return json({ status: "friends" });
+	}
+	if (await count(env, "SELECT COUNT(*) AS total FROM friend_requests WHERE sender = ?", uuid) >= MAX_OUTGOING)
+		return json({ error: "too_many_requests" }, 409);
+	await env.DB.prepare("INSERT OR IGNORE INTO friend_requests (sender, receiver, created_at) VALUES (?, ?, ?)").bind(uuid, target, now).run();
+	return json({ status: "sent" });
+}
+
+async function acceptRequest(request, env, now) {
+	const uuid = await tokenOwner(env, request, now);
+	if (!uuid)
+		return json({ error: "unauthorized" }, 401);
+	const sender = await playerBody(request);
+	if (!sender)
+		return json({ error: "bad_request" }, 400);
+	const pending = await env.DB.prepare("SELECT 1 AS yes FROM friend_requests WHERE sender = ? AND receiver = ?").bind(sender, uuid).first();
+	if (!pending)
+		return json({ error: "no_request" }, 404);
+	if (await count(env, "SELECT COUNT(*) AS total FROM friends WHERE uuid = ?", uuid) >= MAX_FRIENDS)
+		return json({ error: "too_many_friends" }, 409);
+	await befriend(env, uuid, sender);
+	return json({ status: "friends" });
+}
+
+async function removeFriend(request, env, now) {
+	const uuid = await tokenOwner(env, request, now);
+	if (!uuid)
+		return json({ error: "unauthorized" }, 401);
+	const other = await playerBody(request);
+	if (!other)
+		return json({ error: "bad_request" }, 400);
+	await env.DB.batch([
+		env.DB.prepare("DELETE FROM friends WHERE (uuid = ? AND friend = ?) OR (uuid = ? AND friend = ?)").bind(uuid, other, other, uuid),
+		env.DB.prepare("DELETE FROM friend_requests WHERE (sender = ? AND receiver = ?) OR (sender = ? AND receiver = ?)").bind(uuid, other, other, uuid)
+	]);
+	return json({ status: "removed" });
+}
+
+async function listFriends(request, env, now) {
+	const uuid = await tokenOwner(env, request, now);
+	if (!uuid)
+		return json({ error: "unauthorized" }, 401);
+	const friends = await env.DB.prepare(
+		"SELECT f.friend AS uuid, p.name AS name, p.server AS server, p.seen_at AS seen FROM friends f LEFT JOIN presence p ON p.uuid = f.friend WHERE f.uuid = ?"
+	).bind(uuid).all();
+	const incoming = await env.DB.prepare(
+		"SELECT r.sender AS uuid, p.name AS name FROM friend_requests r LEFT JOIN presence p ON p.uuid = r.sender WHERE r.receiver = ? ORDER BY r.created_at"
+	).bind(uuid).all();
+	const outgoing = await env.DB.prepare(
+		"SELECT r.receiver AS uuid, p.name AS name FROM friend_requests r LEFT JOIN presence p ON p.uuid = r.receiver WHERE r.sender = ? ORDER BY r.created_at"
+	).bind(uuid).all();
+	return json({
+		friends: friends.results.map(row => {
+			const online = row.seen != null && now - row.seen <= ONLINE_SECONDS;
+			return { uuid: row.uuid, name: row.name ?? "", online, server: online ? row.server ?? "" : "" };
+		}),
+		incoming: incoming.results.map(row => ({ uuid: row.uuid, name: row.name ?? "" })),
+		outgoing: outgoing.results.map(row => ({ uuid: row.uuid, name: row.name ?? "" }))
+	});
+}
+
+async function writePresence(request, env, now) {
+	const uuid = await tokenOwner(env, request, now);
+	if (!uuid)
+		return json({ error: "unauthorized" }, 401);
+	const body = await readJson(request);
+	if (!body || typeof body.name !== "string" || !PLAYER_NAME.test(body.name) || typeof body.server !== "string" || !SERVER.test(body.server))
+		return json({ error: "bad_request" }, 400);
+	const last = await env.DB.prepare("SELECT seen_at AS at, server FROM presence WHERE uuid = ?").bind(uuid).first();
+	if (last && now - last.at < MIN_PRESENCE_SECONDS && last.server === body.server)
+		return json({ error: "too_fast" }, 429);
+	await env.DB.prepare("INSERT OR REPLACE INTO presence (uuid, name, server, seen_at) VALUES (?, ?, ?, ?)").bind(uuid, body.name, body.server, now).run();
+	return json({ saved: true });
+}
+
+async function goOffline(request, env, now) {
+	const uuid = await tokenOwner(env, request, now);
+	if (!uuid)
+		return json({ error: "unauthorized" }, 401);
+	await env.DB.prepare("UPDATE presence SET seen_at = 0, server = '' WHERE uuid = ?").bind(uuid).run();
+	return json({ saved: true });
+}
+
+async function roleOf(env, uuid) {
+	return (await env.DB.prepare("SELECT role FROM roles WHERE uuid = ?").bind(uuid).first())?.role ?? "";
+}
+
+async function readTeam(request, env, now) {
+	const uuid = await tokenOwner(env, request, now);
+	if (!uuid)
+		return json({ error: "unauthorized" }, 401);
+	const role = await roleOf(env, uuid);
+	if (role !== "owner" && role !== "staff")
+		return json({ role, team: [] });
+	const { results } = await env.DB.prepare(`SELECT uuid, name, role FROM roles ORDER BY CASE role WHEN 'owner' THEN 0 WHEN 'staff' THEN 1 ELSE 2 END, name LIMIT ${MAX_TEAM}`).all();
+	return json({ role, team: results.map(row => ({ uuid: row.uuid, name: row.name ?? "", role: row.role })) });
+}
+
+async function writeRole(request, env, now) {
+	const uuid = await tokenOwner(env, request, now);
+	if (!uuid)
+		return json({ error: "unauthorized" }, 401);
+	if (await roleOf(env, uuid) !== "owner")
+		return json({ error: "forbidden" }, 403);
+	const body = await readJson(request);
+	if (!body || typeof body.uuid !== "string" || !UUID.test(body.uuid) || typeof body.role !== "string" || (body.role !== "" && !GIVEN_ROLES.includes(body.role)))
+		return json({ error: "bad_request" }, 400);
+	const name = typeof body.name === "string" && PLAYER_NAME.test(body.name) ? body.name : "";
+	if (body.uuid === uuid || await roleOf(env, body.uuid) === "owner")
+		return json({ error: "forbidden" }, 403);
+	if (body.role === "") {
+		await env.DB.prepare("DELETE FROM roles WHERE uuid = ?").bind(body.uuid).run();
+		return json({ status: "removed" });
+	}
+	if (await count(env, "SELECT COUNT(*) AS total FROM roles WHERE role != ?", "owner") >= MAX_TEAM)
+		return json({ error: "team_full" }, 409);
+	await env.DB.prepare("INSERT OR REPLACE INTO roles (uuid, role, name) VALUES (?, ?, ?)").bind(body.uuid, body.role, name).run();
+	return json({ status: "saved", role: body.role });
+}
+
 export async function handle(request, env, deps) {
 	const url = new URL(request.url);
 	const now = deps.now();
@@ -170,6 +337,22 @@ export async function handle(request, env, deps) {
 			return readLoadouts(url, env);
 		case "PUT /v1/loadout":
 			return writeLoadout(request, env, now);
+		case "GET /v1/friends":
+			return listFriends(request, env, now);
+		case "POST /v1/friends/request":
+			return sendRequest(request, env, now);
+		case "POST /v1/friends/accept":
+			return acceptRequest(request, env, now);
+		case "POST /v1/friends/remove":
+			return removeFriend(request, env, now);
+		case "PUT /v1/presence":
+			return writePresence(request, env, now);
+		case "DELETE /v1/presence":
+			return goOffline(request, env, now);
+		case "GET /v1/team":
+			return readTeam(request, env, now);
+		case "POST /v1/roles":
+			return writeRole(request, env, now);
 		default:
 			return json({ error: "not_found" }, 404);
 	}

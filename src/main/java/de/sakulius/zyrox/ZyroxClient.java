@@ -2,6 +2,9 @@ package de.sakulius.zyrox;
 
 import com.mojang.blaze3d.platform.InputConstants;
 import de.sakulius.zyrox.cloud.CloudCosmetics;
+import de.sakulius.zyrox.cloud.Friends;
+import de.sakulius.zyrox.cloud.RoleCommand;
+import de.sakulius.zyrox.cloud.Roles;
 import de.sakulius.zyrox.module.Cosmetics;
 import de.sakulius.zyrox.module.HudModule;
 import de.sakulius.zyrox.module.MenuSplash;
@@ -14,9 +17,10 @@ import de.sakulius.zyrox.music.MusicManager;
 import de.sakulius.zyrox.music.SkyLyrics;
 import de.sakulius.zyrox.music.WindowsMediaSession;
 import de.sakulius.zyrox.screen.PlayerPreviewRenderer;
-import de.sakulius.zyrox.screen.WaypointNameScreen;
+import de.sakulius.zyrox.screen.NameScreen;
 import de.sakulius.zyrox.screen.ZyroxScreen;
 import net.fabricmc.api.ClientModInitializer;
+import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.fabricmc.fabric.api.client.rendering.v1.LivingEntityFeatureRendererRegistrationCallback;
@@ -53,6 +57,7 @@ public class ZyroxClient implements ClientModInitializer {
 		nextKey = KeyBindingHelper.registerKeyBinding(new KeyMapping("key.zyrox.next", InputConstants.Type.KEYSYM, InputConstants.UNKNOWN.getValue(), category));
 		previousKey = KeyBindingHelper.registerKeyBinding(new KeyMapping("key.zyrox.previous", InputConstants.Type.KEYSYM, InputConstants.UNKNOWN.getValue(), category));
 		waypointKey = KeyBindingHelper.registerKeyBinding(new KeyMapping("key.zyrox.waypoint", InputConstants.Type.KEYSYM, InputConstants.KEY_B, category));
+		ClientCommandRegistrationCallback.EVENT.register((dispatcher, context) -> RoleCommand.register(dispatcher));
 		SpecialGuiElementRegistry.register(context -> new PlayerPreviewRenderer(context.vertexConsumers()));
 		MusicManager.start();
 		WorldRenderEvents.AFTER_ENTITIES.register(SkyLyrics::render);
@@ -72,7 +77,9 @@ public class ZyroxClient implements ClientModInitializer {
 				client.setScreen(new ZyroxScreen());
 			while (waypointKey.consumeClick())
 				if (Waypoints.canAdd(client))
-					client.setScreen(new WaypointNameScreen(null, "New waypoint", Waypoints.nextName(client), name -> Waypoints.add(client, name)));
+					client.setScreen(new NameScreen(null, "New waypoint", Waypoints.nextName(client), name -> Waypoints.add(client, name)));
+			Friends.tick(client);
+			Roles.tick(client);
 			updateAutoSprint(client);
 			PvpTracker.tick(client);
 			Cosmetics.tick(client);
