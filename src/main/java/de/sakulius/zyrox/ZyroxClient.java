@@ -4,7 +4,6 @@ import com.mojang.blaze3d.platform.InputConstants;
 import de.sakulius.zyrox.cloud.CloudCosmetics;
 import de.sakulius.zyrox.cloud.Friends;
 import de.sakulius.zyrox.cloud.RoleCommand;
-import de.sakulius.zyrox.cloud.Roles;
 import de.sakulius.zyrox.module.Cosmetics;
 import de.sakulius.zyrox.module.HudModule;
 import de.sakulius.zyrox.module.MenuSplash;
@@ -79,7 +78,6 @@ public class ZyroxClient implements ClientModInitializer {
 				if (Waypoints.canAdd(client))
 					client.gui.setScreen(new NameScreen(null, "New waypoint", Waypoints.nextName(client), name -> Waypoints.add(client, name)));
 			Friends.tick(client);
-			Roles.tick(client);
 			updateAutoSprint(client);
 			PvpTracker.tick(client);
 			Cosmetics.tick(client);
