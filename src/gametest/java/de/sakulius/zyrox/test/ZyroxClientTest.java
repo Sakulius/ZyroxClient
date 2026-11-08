@@ -224,6 +224,11 @@ public class ZyroxClientTest implements FabricClientGameTest {
 			clickOn(ZyroxScreen::centerCard);
 			context.waitTicks(4);
 			clickOn(screen -> screen.cosmeticTabCenter(0));
+			clickOn(screen -> screen.tileCenter(2));
+			check(Cosmetics.capeId.equals(Cosmetics.DEFAULT_CAPE), "a locked cape cannot be picked, now " + Cosmetics.capeId);
+			context.waitTicks(10);
+			context.takeScreenshot("cosmetics-locked");
+			Cosmetics.setOwned(List.of("aurora", "nebula", "party_hat", "glacier"));
 			clickOn(screen -> screen.rowCenter("legacy-capes"));
 			context.waitTicks(10);
 			clickOn(screen -> screen.tileCenter(1));
@@ -760,6 +765,7 @@ public class ZyroxClientTest implements FabricClientGameTest {
 		check(CloudCosmetics.status() == CloudCosmetics.Status.NOT_SET_UP, "without a server cosmetics stay local");
 		var own = context.computeOnClient(client -> client.getUser().getProfileId());
 		var skin = context.computeOnClient(client -> client.player.getSkin());
+		post("/__dev/own", "{\"uuid\":\"" + own.toString().replace("-", "") + "\",\"items\":[\"party_hat\",\"glacier\"]}");
 		CloudCosmetics.serverUrl = DEV_SERVER;
 		CloudCosmetics.prover = ZyroxClientTest::testProof;
 		Cosmetics.hatId = "party_hat";

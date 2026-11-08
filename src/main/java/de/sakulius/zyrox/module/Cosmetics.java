@@ -2,10 +2,14 @@ package de.sakulius.zyrox.module;
 
 import de.sakulius.zyrox.ZyroxClient;
 import de.sakulius.zyrox.cloud.CloudCosmetics;
+import de.sakulius.zyrox.cloud.Roles;
 import de.sakulius.zyrox.screen.CameraRig;
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import net.minecraft.client.Minecraft;
@@ -75,11 +79,14 @@ public final class Cosmetics {
 		new Wearable("red_party_hat", "Party Hat"),
 		new Wearable("third_party_hat", "Striped Hat"));
 
+	private static final Set<String> FREE = Set.of(DEFAULT_CAPE, NOTHING, "zyrox", "legacy_zyrox", "red_party_hat", "aura_off", "aura_flame");
+
 	public static String capeId = DEFAULT_CAPE;
 	public static String hatId = NOTHING;
 	public static int aura;
 
 	private static final Map<UUID, CachedSkin> SKINS = new ConcurrentHashMap<>();
+	private static volatile Set<String> owned = Set.of();
 	private static long ticks;
 
 	private Cosmetics() {
@@ -95,6 +102,24 @@ public final class Cosmetics {
 
 	private static Cape legacyCape(String name, String texture) {
 		return new Cape(texture, name, legacyTexture(texture));
+	}
+
+	public static String auraId(Aura aura) {
+		return "aura_" + aura.name().toLowerCase(Locale.ROOT).replace(' ', '_');
+	}
+
+	public static boolean owns(String id) {
+		return FREE.contains(id) || owned.contains(id) || Roles.own() != null;
+	}
+
+	public static void setOwned(Collection<String> items) {
+		owned = Set.copyOf(items);
+		if (!owns(capeId))
+			capeId = DEFAULT_CAPE;
+		if (!owns(hatId))
+			hatId = NOTHING;
+		if (!owns(auraId(AURAS.get(aura))))
+			aura = 0;
 	}
 
 	public static Cape capeById(String id) {

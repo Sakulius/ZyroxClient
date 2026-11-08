@@ -4,7 +4,6 @@ import com.google.gson.JsonObject;
 import de.sakulius.zyrox.ZyroxClient;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -155,10 +154,6 @@ public final class Roles {
 				report.accept("The Zyrox server is not reachable.");
 			}
 		});
-	}
-
-	public static Role parse(String text) {
-		return Role.of(text.toLowerCase(Locale.ROOT));
 	}
 
 	private static void handle(Exception e) {

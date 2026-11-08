@@ -4,6 +4,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
 import com.google.gson.JsonParser;
 import de.sakulius.zyrox.ZyroxClient;
+import de.sakulius.zyrox.module.Cosmetics;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -216,6 +217,13 @@ public final class Friends {
 			list.sort(Comparator.comparing((Friend friend) -> !friend.online()).thenComparing(friend -> friend.name().toLowerCase()));
 			friends = List.copyOf(list);
 			Roles.accept(body);
+			if (body.has("owned") && body.get("owned").isJsonArray()) {
+				var owned = new ArrayList<String>();
+				for (var entry : body.getAsJsonArray("owned"))
+					if (entry.isJsonPrimitive())
+						owned.add(entry.getAsString());
+				Cosmetics.setOwned(owned);
+			}
 			incoming = requests(body, "incoming");
 			outgoing = requests(body, "outgoing");
 			loaded = true;

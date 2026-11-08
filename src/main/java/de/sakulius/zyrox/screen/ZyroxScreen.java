@@ -47,7 +47,7 @@ public class ZyroxScreen extends Screen {
 	private record Page(String id, String title, String description, Identifier icon, float orbit, Supplier<List<Row>> rows) {
 	}
 
-	private record Tile(String name, BooleanSupplier chosen, Runnable choose, TilePreview preview) {
+	private record Tile(String name, BooleanSupplier chosen, Runnable choose, TilePreview preview, BooleanSupplier locked) {
 	}
 
 	private interface TilePreview {
@@ -428,7 +428,7 @@ public class ZyroxScreen extends Screen {
 		return new Tile(module.name, () -> module.enabled, () -> module.enabled = !module.enabled, (graphics, x, y, size, alpha) -> {
 			int shown = size * 3 / 4;
 			graphics.blit(RenderPipelines.GUI_TEXTURED, image, x + (size - shown) / 2, y + (size - shown) / 2, 0f, 0f, shown, shown, imageSize, imageSize, imageSize, imageSize, Fx.alpha(TEXT, module.enabled ? alpha : alpha * 0.35f));
-		});
+		}, () -> false);
 	}
 
 	private List<Row> cosmeticRows() {
@@ -447,6 +447,8 @@ public class ZyroxScreen extends Screen {
 			default -> auraTiles();
 		}));
 		rows.add(syncStatus());
+		if (Roles.own() == null)
+			rows.add(note("Locked cosmetics are given out by the Zyrox team."));
 		if (cosmeticTab == 1)
 			rows.add(note("Hats step aside while you wear a helmet."));
 		else if (cosmeticTab == 2)
@@ -503,7 +505,7 @@ public class ZyroxScreen extends Screen {
 					graphics.blit(RenderPipelines.GUI_TEXTURED, cape.texture().texturePath(), x + (size - capeWidth) / 2, y, 1f, 1f, capeWidth, size, 10, 16, 64, 32, Fx.alpha(TEXT, alpha));
 				else
 					Type.REGULAR.centered(graphics, font, "Own", x + size / 2, y + size / 2 - 4, Fx.alpha(MUTED, alpha));
-			}));
+			}, () -> !Cosmetics.owns(cape.id())));
 		}
 		return tiles;
 	}
@@ -517,7 +519,7 @@ public class ZyroxScreen extends Screen {
 					graphics.blit(RenderPipelines.GUI_TEXTURED, preview, x, y, 0f, 0f, size, size, ModelPreview.SIZE, ModelPreview.SIZE, ModelPreview.SIZE, ModelPreview.SIZE, Fx.alpha(TEXT, alpha));
 				else
 					nothingIcon(graphics, x, y, size, alpha);
-			}));
+			}, () -> !Cosmetics.owns(wearable.id())));
 		}
 		return tiles;
 	}
@@ -534,9 +536,14 @@ public class ZyroxScreen extends Screen {
 				}
 				int icon = size * 3 / 4;
 				graphics.blit(RenderPipelines.GUI_TEXTURED, aura.icon(), x + (size - icon) / 2, y + (size - icon) / 2, 0f, 0f, icon, icon, aura.iconSize(), aura.iconSize(), aura.iconSize(), aura.iconSize(), Fx.alpha(TEXT, alpha));
-			}));
+			}, () -> !Cosmetics.owns(Cosmetics.auraId(aura))));
 		}
 		return tiles;
+	}
+
+	private void lockIcon(GuiGraphicsExtractor graphics, int x, int y, float alpha) {
+		Draw.outline(graphics, x + 1.5f, y, 5, 7, 2.5f, Fx.alpha(TEXT, alpha));
+		Draw.roundRect(graphics, x, y + 3.5f, 8, 5.5f, 1.5f, Fx.alpha(TEXT, alpha));
 	}
 
 	private void nothingIcon(GuiGraphicsExtractor graphics, int x, int y, int size, float alpha) {
@@ -583,8 +590,11 @@ public class ZyroxScreen extends Screen {
 					int ty = tileY(y, w, i);
 					boolean hovered = inside(mouseX, mouseY, tx, ty, tileWidth, TILE_HEIGHT);
 					Draw.roundRect(graphics, tx, ty, tileWidth, TILE_HEIGHT, 5f, Fx.alpha(hovered ? 0x30FFFFFF : 0x14FFFFFF, alpha));
-					tile.preview().draw(graphics, tx + (tileWidth - TILE_PREVIEW) / 2, ty + 3, TILE_PREVIEW, alpha);
-					Type.REGULAR.centered(graphics, font, fitted(tile.name(), tileWidth - 4), tx + tileWidth / 2, ty + TILE_PREVIEW + 6, Fx.alpha(tile.chosen().getAsBoolean() ? TEXT : MUTED, alpha));
+					boolean locked = tile.locked().getAsBoolean();
+					tile.preview().draw(graphics, tx + (tileWidth - TILE_PREVIEW) / 2, ty + 3, TILE_PREVIEW, locked ? alpha * 0.3f : alpha);
+					Type.REGULAR.centered(graphics, font, fitted(tile.name(), tileWidth - 4), tx + tileWidth / 2, ty + TILE_PREVIEW + 6, Fx.alpha(tile.chosen().getAsBoolean() ? TEXT : MUTED, locked ? alpha * 0.6f : alpha));
+					if (locked)
+						lockIcon(graphics, tx + tileWidth - 12, ty + 4, alpha);
 					if (tile.chosen().getAsBoolean())
 						Draw.outline(graphics, tx - 1, ty - 1, tileWidth + 2, TILE_HEIGHT + 2, 6f, Fx.alpha(ZyroxTheme.accent(), alpha));
 				}
@@ -595,6 +605,10 @@ public class ZyroxScreen extends Screen {
 				int tileWidth = tileWidth(w);
 				for (int i = 0; i < tiles.size(); i++) {
 					if (inside(mouseX, clickY, tileX(x, w, i), tileY(y, w, i), tileWidth, TILE_HEIGHT)) {
+						if (tiles.get(i).locked().getAsBoolean()) {
+							playClick(0.6f);
+							return;
+						}
 						tiles.get(i).choose().run();
 						playClick(1.3f);
 						return;
