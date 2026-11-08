@@ -40,10 +40,10 @@ public final class Friends {
 	private static final Pattern NAME = Pattern.compile("[A-Za-z0-9_]{1,16}");
 	private static final Duration TIMEOUT = Duration.ofSeconds(8);
 	private static final HttpClient HTTP = HttpClient.newBuilder().connectTimeout(TIMEOUT).build();
-	private static final int TICKS_BETWEEN_CHECKS = 20;
+	private static final int TICKS_BETWEEN_CHECKS = 5;
 	private static final long PRESENCE_MS = 120_000;
 	private static final long RETRY_MS = 30_000;
-	private static final long WATCHED_REFRESH_MS = 10_000;
+	private static final long WATCHED_REFRESH_MS = 5_000;
 	private static final long IDLE_REFRESH_MS = 120_000;
 	private static final int HTTP_OK = 200;
 	private static final int HTTP_NOT_FOUND = 404;
@@ -215,6 +215,7 @@ public final class Friends {
 			}
 			list.sort(Comparator.comparing((Friend friend) -> !friend.online()).thenComparing(friend -> friend.name().toLowerCase()));
 			friends = List.copyOf(list);
+			Roles.accept(body);
 			incoming = requests(body, "incoming");
 			outgoing = requests(body, "outgoing");
 			loaded = true;

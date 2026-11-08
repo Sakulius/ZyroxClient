@@ -16,6 +16,27 @@ const MAX_FRIENDS = 100;
 const MAX_OUTGOING = 50;
 const MAX_TEAM = 200;
 const GIVEN_ROLES = ["staff", "tester"];
+const CACHE_SECONDS = 4;
+const MAX_CACHED = 5000;
+
+const caches = new WeakMap();
+
+function cacheFor(env) {
+	let cache = caches.get(env.DB);
+	if (!cache) {
+		cache = new Map();
+		caches.set(env.DB, cache);
+	}
+	return cache;
+}
+
+function forget(env, uuid) {
+	cacheFor(env).delete(uuid);
+}
+
+function reader(env) {
+	return typeof env.DB.withSession === "function" ? env.DB.withSession("first-unconstrained") : env.DB;
+}
 
 const encoder = new TextEncoder();
 
@@ -129,20 +150,38 @@ async function finishAuth(request, env, deps, now) {
 	return json({ uuid: body.uuid, token: await newToken(env, body.uuid, now), expires: now + TOKEN_SECONDS });
 }
 
-async function readLoadouts(url, env) {
+async function readLoadouts(url, env, now) {
 	const uuids = [...new Set((url.searchParams.get("uuids") ?? "").split(",").filter(Boolean))];
 	if (uuids.length === 0 || uuids.length > MAX_UUIDS || !uuids.every(uuid => UUID.test(uuid)))
 		return json({ error: "bad_request" }, 400);
-	const marks = uuids.map(() => "?").join(",");
-	const { results } = await env.DB.prepare(`SELECT uuid, slot, item FROM loadouts WHERE uuid IN (${marks})`).bind(...uuids).all();
+	const cache = cacheFor(env);
+	const missing = uuids.filter(uuid => !(cache.get(uuid)?.at > now - CACHE_SECONDS));
+	if (missing.length > 0) {
+		const db = reader(env);
+		const marks = missing.map(() => "?").join(",");
+		const [items, team] = await Promise.all([
+			db.prepare(`SELECT uuid, slot, item FROM loadouts WHERE uuid IN (${marks})`).bind(...missing).all(),
+			db.prepare(`SELECT uuid, role FROM roles WHERE uuid IN (${marks})`).bind(...missing).all()
+		]);
+		if (cache.size + missing.length > MAX_CACHED)
+			cache.clear();
+		for (const uuid of missing)
+			cache.set(uuid, { at: now, items: null, role: null });
+		for (const row of items.results)
+			(cache.get(row.uuid).items ??= {})[row.slot] = row.item;
+		for (const row of team.results)
+			cache.get(row.uuid).role = row.role;
+	}
 	const loadouts = {};
-	for (const row of results)
-		(loadouts[row.uuid] ??= {})[row.slot] = row.item;
-	const team = await env.DB.prepare(`SELECT uuid, role FROM roles WHERE uuid IN (${marks})`).bind(...uuids).all();
 	const roles = {};
-	for (const row of team.results)
-		roles[row.uuid] = row.role;
-	return json({ loadouts, roles }, 200, { "cache-control": "public, max-age=30" });
+	for (const uuid of uuids) {
+		const entry = cache.get(uuid);
+		if (entry?.items)
+			loadouts[uuid] = entry.items;
+		if (entry?.role)
+			roles[uuid] = entry.role;
+	}
+	return json({ loadouts, roles }, 200, { "cache-control": "public, max-age=4" });
 }
 
 async function writeLoadout(request, env, now) {
@@ -166,6 +205,7 @@ async function writeLoadout(request, env, now) {
 		env.DB.prepare("DELETE FROM loadouts WHERE uuid = ?").bind(uuid),
 		...entries.map(([slot, item]) => insert.bind(uuid, slot, item, now))
 	]);
+	forget(env, uuid);
 	return json({ saved: true });
 }
 
@@ -255,7 +295,10 @@ async function listFriends(request, env, now) {
 	const outgoing = await env.DB.prepare(
 		"SELECT r.receiver AS uuid, p.name AS name FROM friend_requests r LEFT JOIN presence p ON p.uuid = r.receiver WHERE r.sender = ? ORDER BY r.created_at"
 	).bind(uuid).all();
+	const { role, team } = await teamOf(env, uuid);
 	return json({
+		role,
+		team,
 		friends: friends.results.map(row => {
 			const online = row.seen != null && now - row.seen <= ONLINE_SECONDS;
 			return { uuid: row.uuid, name: row.name ?? "", online, server: online ? row.server ?? "" : "" };
@@ -295,11 +338,15 @@ async function readTeam(request, env, now) {
 	const uuid = await tokenOwner(env, request, now);
 	if (!uuid)
 		return json({ error: "unauthorized" }, 401);
+	return json(await teamOf(env, uuid));
+}
+
+async function teamOf(env, uuid) {
 	const role = await roleOf(env, uuid);
 	if (role !== "owner" && role !== "staff")
-		return json({ role, team: [] });
+		return { role, team: [] };
 	const { results } = await env.DB.prepare(`SELECT uuid, name, role FROM roles ORDER BY CASE role WHEN 'owner' THEN 0 WHEN 'staff' THEN 1 ELSE 2 END, name LIMIT ${MAX_TEAM}`).all();
-	return json({ role, team: results.map(row => ({ uuid: row.uuid, name: row.name ?? "", role: row.role })) });
+	return { role, team: results.map(row => ({ uuid: row.uuid, name: row.name ?? "", role: row.role })) };
 }
 
 async function writeRole(request, env, now) {
@@ -314,6 +361,7 @@ async function writeRole(request, env, now) {
 	const name = typeof body.name === "string" && PLAYER_NAME.test(body.name) ? body.name : "";
 	if (body.uuid === uuid || await roleOf(env, body.uuid) === "owner")
 		return json({ error: "forbidden" }, 403);
+	forget(env, body.uuid);
 	if (body.role === "") {
 		await env.DB.prepare("DELETE FROM roles WHERE uuid = ?").bind(body.uuid).run();
 		return json({ status: "removed" });
@@ -334,7 +382,7 @@ export async function handle(request, env, deps) {
 		case "POST /v1/auth/finish":
 			return finishAuth(request, env, deps, now);
 		case "GET /v1/loadouts":
-			return readLoadouts(url, env);
+			return readLoadouts(url, env, now);
 		case "PUT /v1/loadout":
 			return writeLoadout(request, env, now);
 		case "GET /v1/friends":
@@ -363,5 +411,8 @@ const verifyCertificate = certificateVerifier(PLAYER_CERTIFICATE_KEYS);
 export default {
 	fetch(request, env) {
 		return handle(request, env, { verifyCertificate, now: () => Math.floor(Date.now() / 1000) });
+	},
+	async scheduled(event, env) {
+		await env.DB.prepare("SELECT 1 AS awake").first();
 	}
 };

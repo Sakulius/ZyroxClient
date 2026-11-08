@@ -45,10 +45,6 @@ public final class Roles {
 
 	private static final Logger LOGGER = LoggerFactory.getLogger(ZyroxClient.MOD_ID);
 	private static final Pattern NAME = Pattern.compile("[A-Za-z0-9_]{1,16}");
-	private static final int TICKS_BETWEEN_CHECKS = 20;
-	private static final long REFRESH_MS = 300_000;
-	private static final long WATCHED_REFRESH_MS = 15_000;
-	private static final long RETRY_MS = 60_000;
 	private static final int HTTP_OK = 200;
 	private static final int HTTP_FORBIDDEN = 403;
 
@@ -56,10 +52,6 @@ public final class Roles {
 	private static volatile Role own;
 	private static volatile List<Member> team = List.of();
 	private static volatile String message = "";
-	private static volatile boolean busy;
-	private static volatile long nextLoad;
-	private static long ticks;
-	private static long watchedUntil;
 
 	private Roles() {
 	}
@@ -98,56 +90,27 @@ public final class Roles {
 	}
 
 	public static void watch() {
-		long now = System.currentTimeMillis();
-		if (watchedUntil < now)
-			nextLoad = 0;
-		watchedUntil = now + 2_000;
+		Friends.watch();
 	}
 
 	public static void refreshSoon() {
-		nextLoad = 0;
+		Friends.refreshSoon();
 	}
 
-	public static void tick(Minecraft client) {
-		if (++ticks % TICKS_BETWEEN_CHECKS != 0 || !Friends.available() || busy)
+	static void accept(JsonObject body) {
+		if (!body.has("role"))
 			return;
-		long now = System.currentTimeMillis();
-		if (now < nextLoad)
-			return;
-		nextLoad = now + (watchedUntil > now ? WATCHED_REFRESH_MS : REFRESH_MS);
-		busy = true;
-		CloudCosmetics.submit(() -> {
-			try {
-				load(client);
-			} finally {
-				busy = false;
+		own = Role.of(Friends.text(body, "role"));
+		var list = new ArrayList<Member>();
+		if (body.has("team") && body.get("team").isJsonArray()) {
+			for (var entry : body.getAsJsonArray("team")) {
+				var json = entry.getAsJsonObject();
+				var role = Role.of(Friends.text(json, "role"));
+				if (role != null)
+					list.add(new Member(Friends.uuid(Friends.text(json, "uuid")), Friends.text(json, "name"), role));
 			}
-		});
-	}
-
-	private static void load(Minecraft client) {
-		try {
-			var answer = CloudCosmetics.call(client, "GET", "/v1/team", null);
-			if (answer.status() != HTTP_OK) {
-				nextLoad = System.currentTimeMillis() + RETRY_MS;
-				return;
-			}
-			var body = answer.body();
-			own = Role.of(Friends.text(body, "role"));
-			var list = new ArrayList<Member>();
-			if (body.has("team") && body.get("team").isJsonArray()) {
-				for (var entry : body.getAsJsonArray("team")) {
-					var json = entry.getAsJsonObject();
-					var role = Role.of(Friends.text(json, "role"));
-					if (role != null)
-						list.add(new Member(Friends.uuid(Friends.text(json, "uuid")), Friends.text(json, "name"), role));
-				}
-			}
-			team = List.copyOf(list);
-		} catch (Exception e) {
-			handle(e);
-			nextLoad = System.currentTimeMillis() + RETRY_MS;
 		}
+		team = List.copyOf(list);
 	}
 
 	public static void set(Minecraft client, String name, Role role, Consumer<String> done) {
@@ -186,7 +149,7 @@ public final class Roles {
 				} else {
 					report.accept("That did not work, try again.");
 				}
-				load(client);
+				Friends.refreshSoon();
 			} catch (Exception e) {
 				handle(e);
 				report.accept("The Zyrox server is not reachable.");

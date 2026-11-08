@@ -310,3 +310,35 @@ test("another owner cannot be demoted", async () => {
 	const owner = await s.signIn(PLAYER);
 	assert.equal((await s.call("POST", "/v1/roles", { uuid: OTHER, role: "tester" }, owner)).status, 403);
 });
+
+test("the friends answer carries the role and team", async () => {
+	const s = setup();
+	await makeOwner(s);
+	const owner = await s.signIn(PLAYER);
+	const body = await (await s.call("GET", "/v1/friends", undefined, owner)).json();
+	assert.equal(body.role, "owner");
+	assert.ok(body.team.some(member => member.uuid === PLAYER));
+	const stranger = await s.signIn(OTHER);
+	const plain = await (await s.call("GET", "/v1/friends", undefined, stranger)).json();
+	assert.equal(plain.role, "");
+	assert.deepEqual(plain.team, []);
+});
+
+test("cached loadouts update right after a change", async () => {
+	const s = setup();
+	await makeOwner(s);
+	const owner = await s.signIn(PLAYER);
+	const token = await s.signIn(OTHER);
+	const read = async () => (await (await s.call("GET", `/v1/loadouts?uuids=${OTHER}`)).json());
+	assert.deepEqual(await read(), { loadouts: {}, roles: {} });
+	await s.call("PUT", "/v1/loadout", { items: { cape: "zyrox" } }, token);
+	assert.deepEqual((await read()).loadouts, { [OTHER]: { cape: "zyrox" } });
+	await s.call("POST", "/v1/roles", { uuid: OTHER, role: "tester" }, owner);
+	assert.deepEqual((await read()).roles, { [OTHER]: "tester" });
+});
+
+test("the timer keeps the database awake", async () => {
+	const s = setup();
+	const worker = (await import("./worker.js")).default;
+	await worker.scheduled({}, s.env);
+});

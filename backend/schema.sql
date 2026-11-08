@@ -33,3 +33,5 @@ CREATE TABLE IF NOT EXISTS roles (
 );
 
 INSERT OR REPLACE INTO roles (uuid, role, name) VALUES ('a73db1899b88423998a6ba21c3fcef41', 'owner', 'Sakulius');
+
+CREATE INDEX IF NOT EXISTS friend_requests_receiver ON friend_requests (receiver, created_at);

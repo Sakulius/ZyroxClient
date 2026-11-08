@@ -7,3 +7,6 @@ preview_urls = false
 binding = "DB"
 database_name = "zyrox-cosmetics"
 database_id = "YOUR_DATABASE_ID"
+
+[triggers]
+crons = ["*/5 * * * *"]

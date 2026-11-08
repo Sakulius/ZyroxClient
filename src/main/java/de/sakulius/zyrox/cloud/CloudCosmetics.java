@@ -53,7 +53,7 @@ public final class CloudCosmetics {
 
 	private static final Logger LOGGER = LoggerFactory.getLogger(ZyroxClient.MOD_ID);
 	private static final Duration TIMEOUT = Duration.ofSeconds(8);
-	private static final int TICKS_BETWEEN_CHECKS = 20;
+	private static final int TICKS_BETWEEN_CHECKS = 5;
 	private static final int MAX_BATCH = 50;
 	private static final int MAX_REMEMBERED = 500;
 	private static final long REFRESH_MS = 5_000;
