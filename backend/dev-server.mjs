@@ -19,6 +19,14 @@ createServer(async (req, res) => {
 	if (req.url === "/__dev/seed") {
 		const seed = JSON.parse(body.toString());
 		await env.DB.prepare("INSERT OR REPLACE INTO loadouts (uuid, slot, item, updated_at) VALUES (?, ?, ?, 0)").bind(seed.uuid, seed.slot, seed.item).run();
+		await env.DB.prepare("INSERT OR IGNORE INTO owned (uuid, item) VALUES (?, ?)").bind(seed.uuid, seed.item).run();
+		res.end("{}");
+		return;
+	}
+	if (req.url === "/__dev/own") {
+		const seed = JSON.parse(body.toString());
+		for (const item of seed.items)
+			await env.DB.prepare("INSERT OR IGNORE INTO owned (uuid, item) VALUES (?, ?)").bind(seed.uuid, item).run();
 		res.end("{}");
 		return;
 	}

@@ -17,6 +17,8 @@ const MAX_OUTGOING = 50;
 const MAX_TEAM = 200;
 const GIVEN_ROLES = ["staff", "tester"];
 const CACHE_SECONDS = 4;
+const MAX_OWNED = 200;
+const FREE = new Set(["default", "none", "zyrox", "legacy_zyrox", "red_party_hat", "aura_off", "aura_flame"]);
 const MAX_CACHED = 5000;
 
 const caches = new WeakMap();
@@ -82,6 +84,12 @@ async function validChallenge(env, challenge, now) {
 async function newToken(env, uuid, now) {
 	const payload = `${uuid}.${now + TOKEN_SECONDS}`;
 	return `${payload}.${await sign(env.TOKEN_SECRET, `token.${payload}`)}`;
+}
+
+function isAdmin(env, request) {
+	const header = request.headers.get("authorization") ?? "";
+	const key = typeof env.ADMIN_KEY === "string" ? env.ADMIN_KEY.trim() : "";
+	return key.length >= 32 && sameText(header, `Admin ${key}`);
 }
 
 async function tokenOwner(env, request, now) {
@@ -159,18 +167,23 @@ async function readLoadouts(url, env, now) {
 	if (missing.length > 0) {
 		const db = reader(env);
 		const marks = missing.map(() => "?").join(",");
-		const [items, team] = await Promise.all([
+		const [items, team, owned] = await Promise.all([
 			db.prepare(`SELECT uuid, slot, item FROM loadouts WHERE uuid IN (${marks})`).bind(...missing).all(),
-			db.prepare(`SELECT uuid, role FROM roles WHERE uuid IN (${marks})`).bind(...missing).all()
+			db.prepare(`SELECT uuid, role FROM roles WHERE uuid IN (${marks})`).bind(...missing).all(),
+			db.prepare(`SELECT uuid, item FROM owned WHERE uuid IN (${marks})`).bind(...missing).all()
 		]);
 		if (cache.size + missing.length > MAX_CACHED)
 			cache.clear();
 		for (const uuid of missing)
 			cache.set(uuid, { at: now, items: null, role: null });
-		for (const row of items.results)
-			(cache.get(row.uuid).items ??= {})[row.slot] = row.item;
 		for (const row of team.results)
 			cache.get(row.uuid).role = row.role;
+		const has = new Set(owned.results.map(row => `${row.uuid}/${row.item}`));
+		for (const row of items.results) {
+			const entry = cache.get(row.uuid);
+			if (entry.role || FREE.has(row.item) || has.has(`${row.uuid}/${row.item}`))
+				(entry.items ??= {})[row.slot] = row.item;
+		}
 	}
 	const loadouts = {};
 	const roles = {};
@@ -296,9 +309,11 @@ async function listFriends(request, env, now) {
 		"SELECT r.receiver AS uuid, p.name AS name FROM friend_requests r LEFT JOIN presence p ON p.uuid = r.receiver WHERE r.sender = ? ORDER BY r.created_at"
 	).bind(uuid).all();
 	const { role, team } = await teamOf(env, uuid);
+	const owned = await env.DB.prepare("SELECT item FROM owned WHERE uuid = ? ORDER BY item").bind(uuid).all();
 	return json({
 		role,
 		team,
+		owned: owned.results.map(row => row.item),
 		friends: friends.results.map(row => {
 			const online = row.seen != null && now - row.seen <= ONLINE_SECONDS;
 			return { uuid: row.uuid, name: row.name ?? "", online, server: online ? row.server ?? "" : "" };
@@ -350,10 +365,11 @@ async function teamOf(env, uuid) {
 }
 
 async function writeRole(request, env, now) {
-	const uuid = await tokenOwner(env, request, now);
-	if (!uuid)
+	const admin = isAdmin(env, request);
+	const uuid = admin ? "" : await tokenOwner(env, request, now);
+	if (!admin && !uuid)
 		return json({ error: "unauthorized" }, 401);
-	if (await roleOf(env, uuid) !== "owner")
+	if (!admin && await roleOf(env, uuid) !== "owner")
 		return json({ error: "forbidden" }, 403);
 	const body = await readJson(request);
 	if (!body || typeof body.uuid !== "string" || !UUID.test(body.uuid) || typeof body.role !== "string" || (body.role !== "" && !GIVEN_ROLES.includes(body.role)))
@@ -370,6 +386,39 @@ async function writeRole(request, env, now) {
 		return json({ error: "team_full" }, 409);
 	await env.DB.prepare("INSERT OR REPLACE INTO roles (uuid, role, name) VALUES (?, ?, ?)").bind(body.uuid, body.role, name).run();
 	return json({ status: "saved", role: body.role });
+}
+
+async function writeOwned(request, env, now) {
+	const admin = isAdmin(env, request);
+	const uuid = admin ? "discord" : await tokenOwner(env, request, now);
+	if (!uuid)
+		return json({ error: "unauthorized" }, 401);
+	const role = admin ? "owner" : await roleOf(env, uuid);
+	if (role !== "owner" && role !== "staff")
+		return json({ error: "forbidden" }, 403);
+	const body = await readJson(request);
+	if (!body || typeof body.uuid !== "string" || !UUID.test(body.uuid) || typeof body.item !== "string" || !NAME.test(body.item) || typeof body.owned !== "boolean")
+		return json({ error: "bad_request" }, 400);
+	forget(env, body.uuid);
+	if (!body.owned) {
+		await env.DB.prepare("DELETE FROM owned WHERE uuid = ? AND item = ?").bind(body.uuid, body.item).run();
+		return json({ status: "removed" });
+	}
+	if (await count(env, "SELECT COUNT(*) AS total FROM owned WHERE uuid = ?", body.uuid) >= MAX_OWNED)
+		return json({ error: "too_many" }, 409);
+	await env.DB.prepare("INSERT OR IGNORE INTO owned (uuid, item, given_by, given_at) VALUES (?, ?, ?, ?)").bind(body.uuid, body.item, uuid, now).run();
+	return json({ status: "saved" });
+}
+
+async function readPlayer(url, request, env) {
+	if (!isAdmin(env, request))
+		return json({ error: "unauthorized" }, 401);
+	const uuid = url.searchParams.get("uuid") ?? "";
+	if (!UUID.test(uuid))
+		return json({ error: "bad_request" }, 400);
+	const owned = await env.DB.prepare("SELECT item FROM owned WHERE uuid = ? ORDER BY item").bind(uuid).all();
+	const team = await env.DB.prepare(`SELECT uuid, name, role FROM roles ORDER BY CASE role WHEN 'owner' THEN 0 WHEN 'staff' THEN 1 ELSE 2 END, name LIMIT ${MAX_TEAM}`).all();
+	return json({ role: await roleOf(env, uuid), owned: owned.results.map(row => row.item), team: team.results });
 }
 
 export async function handle(request, env, deps) {
@@ -401,6 +450,10 @@ export async function handle(request, env, deps) {
 			return readTeam(request, env, now);
 		case "POST /v1/roles":
 			return writeRole(request, env, now);
+		case "POST /v1/owned":
+			return writeOwned(request, env, now);
+		case "GET /v1/admin/player":
+			return readPlayer(url, request, env);
 		default:
 			return json({ error: "not_found" }, 404);
 	}

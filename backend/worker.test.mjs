@@ -120,19 +120,19 @@ test("broken certificate data is refused", async () => {
 test("a player can save a cape and everyone can read it", async () => {
 	const s = setup();
 	const token = await s.signIn();
-	assert.equal((await s.call("PUT", "/v1/loadout", { items: { cape: "aurora" } }, token)).status, 200);
+	assert.equal((await s.call("PUT", "/v1/loadout", { items: { cape: "zyrox" } }, token)).status, 200);
 	const { loadouts } = await (await s.call("GET", `/v1/loadouts?uuids=${PLAYER},${OTHER}`)).json();
-	assert.deepEqual(loadouts, { [PLAYER]: { cape: "aurora" } });
+	assert.deepEqual(loadouts, { [PLAYER]: { cape: "zyrox" } });
 });
 
 test("saving replaces the old loadout", async () => {
 	const s = setup();
 	const token = await s.signIn();
-	await s.call("PUT", "/v1/loadout", { items: { cape: "aurora", hat: "crown" } }, token);
+	await s.call("PUT", "/v1/loadout", { items: { cape: "legacy_zyrox", hat: "red_party_hat" } }, token);
 	s.now += 5;
-	await s.call("PUT", "/v1/loadout", { items: { cape: "void" } }, token);
+	await s.call("PUT", "/v1/loadout", { items: { cape: "zyrox" } }, token);
 	const { loadouts } = await (await s.call("GET", `/v1/loadouts?uuids=${PLAYER}`)).json();
-	assert.deepEqual(loadouts[PLAYER], { cape: "void" });
+	assert.deepEqual(loadouts[PLAYER], { cape: "zyrox" });
 });
 
 test("nobody can write without a valid token", async () => {
@@ -341,4 +341,63 @@ test("the timer keeps the database awake", async () => {
 	const s = setup();
 	const worker = (await import("./worker.js")).default;
 	await worker.scheduled({}, s.env);
+});
+
+test("cosmetics a player does not own stay hidden", async () => {
+	const s = setup();
+	const token = await s.signIn(OTHER);
+	await s.call("PUT", "/v1/loadout", { items: { cape: "nebula", hat: "red_party_hat" } }, token);
+	const { loadouts } = await (await s.call("GET", `/v1/loadouts?uuids=${OTHER}`)).json();
+	assert.deepEqual(loadouts, { [OTHER]: { hat: "red_party_hat" } });
+});
+
+test("staff can give and take cosmetics", async () => {
+	const s = setup();
+	await makeOwner(s);
+	const owner = await s.signIn(PLAYER);
+	const token = await s.signIn(OTHER);
+	await s.call("PUT", "/v1/loadout", { items: { cape: "nebula" } }, token);
+	assert.equal((await s.call("POST", "/v1/owned", { uuid: OTHER, item: "nebula", owned: true }, owner)).status, 200);
+	assert.deepEqual((await (await s.call("GET", `/v1/loadouts?uuids=${OTHER}`)).json()).loadouts, { [OTHER]: { cape: "nebula" } });
+	assert.deepEqual((await (await s.call("GET", "/v1/friends", undefined, token)).json()).owned, ["nebula"]);
+	assert.equal((await s.call("POST", "/v1/owned", { uuid: OTHER, item: "nebula", owned: false }, owner)).status, 200);
+	assert.deepEqual((await (await s.call("GET", `/v1/loadouts?uuids=${OTHER}`)).json()).loadouts, {});
+	assert.deepEqual((await (await s.call("GET", "/v1/friends", undefined, token)).json()).owned, []);
+});
+
+test("normal players cannot give cosmetics", async () => {
+	const s = setup();
+	const token = await s.signIn(OTHER);
+	assert.equal((await s.call("POST", "/v1/owned", { uuid: OTHER, item: "nebula", owned: true }, token)).status, 403);
+	assert.equal((await s.call("POST", "/v1/owned", { uuid: OTHER, item: "nebula", owned: true })).status, 401);
+	await makeOwner(s);
+	const owner = await s.signIn(PLAYER);
+	for (const body of [{ uuid: OTHER, item: "../x", owned: true }, { uuid: "x", item: "nebula", owned: true }, { uuid: OTHER, item: "nebula" }])
+		assert.equal((await s.call("POST", "/v1/owned", body, owner)).status, 400, JSON.stringify(body));
+});
+
+test("the team wears every cosmetic", async () => {
+	const s = setup();
+	await makeOwner(s);
+	const owner = await s.signIn(PLAYER);
+	await s.call("PUT", "/v1/loadout", { items: { cape: "nebula", hat: "party_hat" } }, owner);
+	assert.deepEqual((await (await s.call("GET", `/v1/loadouts?uuids=${PLAYER}`)).json()).loadouts, { [PLAYER]: { cape: "nebula", hat: "party_hat" } });
+});
+
+test("the admin key gives cosmetics and roles", async () => {
+	const s = setup();
+	s.env.ADMIN_KEY = "k".repeat(40);
+	const admin = { authorization: `Admin ${"k".repeat(40)}` };
+	const call = (method, path, body, headers) => handle(new Request(`https://test${path}`, { method, body: body && JSON.stringify(body), headers }), s.env, s.deps);
+	assert.equal((await call("POST", "/v1/owned", { uuid: OTHER, item: "nebula", owned: true }, admin)).status, 200);
+	assert.equal((await call("POST", "/v1/roles", { uuid: OTHER, name: "Pal", role: "tester" }, admin)).status, 200);
+	const player = await (await call("GET", `/v1/admin/player?uuid=${OTHER}`, undefined, admin)).json();
+	assert.equal(player.role, "tester");
+	assert.deepEqual(player.owned, ["nebula"]);
+	assert.equal((await call("POST", "/v1/roles", { uuid: "a73db1899b88423998a6ba21c3fcef41", role: "" }, admin)).status, 403);
+	const wrong = { authorization: `Admin ${"x".repeat(40)}` };
+	assert.equal((await call("POST", "/v1/owned", { uuid: OTHER, item: "void", owned: true }, wrong)).status, 401);
+	assert.equal((await call("GET", `/v1/admin/player?uuid=${OTHER}`, undefined, wrong)).status, 401);
+	s.env.ADMIN_KEY = "short";
+	assert.equal((await call("GET", `/v1/admin/player?uuid=${OTHER}`, undefined, { authorization: "Admin short" })).status, 401);
 });
