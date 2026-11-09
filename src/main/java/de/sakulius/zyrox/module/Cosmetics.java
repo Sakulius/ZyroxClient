@@ -6,6 +6,7 @@ import de.sakulius.zyrox.cloud.Roles;
 import de.sakulius.zyrox.screen.CameraRig;
 import java.util.Collection;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -86,6 +87,10 @@ public final class Cosmetics {
 	public static String capeId = DEFAULT_CAPE;
 	public static String hatId = NOTHING;
 	public static int aura;
+	public static String tryCape;
+	public static final Set<String> FAVORITES = new LinkedHashSet<>();
+	public static final String[][] OUTFITS = new String[3][];
+	public static String tryHat;
 
 	private static final Map<UUID, CachedSkin> SKINS = new ConcurrentHashMap<>();
 	private static volatile Set<String> owned = Set.of();
@@ -142,6 +147,25 @@ public final class Cosmetics {
 			aura = 0;
 	}
 
+	public static void wear(String[] outfit) {
+		if (outfit == null)
+			return;
+		if (capeById(outfit[0]) != null && owns(outfit[0]))
+			capeId = outfit[0];
+		if (owns(outfit[1]) && (outfit[1].equals(NOTHING) || hatName(outfit[1]) != null))
+			hatId = outfit[1];
+		try {
+			int index = Integer.parseInt(outfit[2]);
+			if (index >= 0 && index < AURAS.size() && owns(auraId(AURAS.get(index))))
+				aura = index;
+		} catch (NumberFormatException ignored) {
+		}
+	}
+
+	public static String[] outfit() {
+		return new String[] { capeId, hatId, Integer.toString(aura) };
+	}
+
 	public static Cape capeById(String id) {
 		for (var cape : CAPES)
 			if (cape.id().equals(id))
@@ -153,7 +177,7 @@ public final class Cosmetics {
 	}
 
 	public static PlayerSkin apply(UUID player, boolean self, PlayerSkin skin) {
-		var id = self ? capeId : CloudCosmetics.item(player, CAPE_SLOT);
+		var id = self ? (tryCape != null ? tryCape : capeId) : CloudCosmetics.item(player, CAPE_SLOT);
 		var cape = id == null ? null : capeById(id);
 		if (cape == null || cape.texture() == null)
 			return skin;
@@ -173,7 +197,7 @@ public final class Cosmetics {
 	}
 
 	public static Wearable hat(UUID player, boolean self) {
-		var id = self ? hatId : CloudCosmetics.item(player, HAT_SLOT);
+		var id = self ? (tryHat != null ? tryHat : hatId) : CloudCosmetics.item(player, HAT_SLOT);
 		if (id == null || id.equals(NOTHING))
 			return null;
 		for (var wearable : HATS)

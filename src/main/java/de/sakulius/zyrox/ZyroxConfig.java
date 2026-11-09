@@ -2,6 +2,8 @@ package de.sakulius.zyrox;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonNull;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
 import de.sakulius.zyrox.cloud.Friends;
@@ -9,6 +11,8 @@ import de.sakulius.zyrox.module.Cosmetics;
 import de.sakulius.zyrox.module.HudModule;
 import de.sakulius.zyrox.module.Modules;
 import de.sakulius.zyrox.music.MusicManager;
+import de.sakulius.zyrox.screen.Effects;
+import de.sakulius.zyrox.screen.Sounds;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -75,6 +79,23 @@ public final class ZyroxConfig {
 				MusicManager.offsetMs = intOr(settings, "lyricsOffsetMs", MusicManager.offsetMs);
 				MusicManager.skyLyrics = boolOr(settings, "skyLyrics", MusicManager.skyLyrics);
 				MusicManager.skySize = intOr(settings, "skySize", MusicManager.skySize);
+				Effects.motionBlur = Math.clamp(intOr(settings, "motionBlur", Effects.motionBlur), 0, Effects.MOTION_BLUR.size() - 1);
+				Effects.menuBlur = Math.clamp(intOr(settings, "menuBlur", Effects.menuBlur), 0, Effects.MENU_BLUR.size() - 1);
+				Sounds.volume = Math.clamp(intOr(settings, "menuSounds", Sounds.volume), 0, Sounds.VOLUMES.size() - 1);
+				Sounds.classic = boolOr(settings, "classicSounds", Sounds.classic);
+				if (settings.has("favorites"))
+					for (var item : settings.getAsJsonArray("favorites"))
+						Cosmetics.FAVORITES.add(item.getAsString());
+				if (settings.has("outfits")) {
+					var outfits = settings.getAsJsonArray("outfits");
+					for (int i = 0; i < Math.min(outfits.size(), Cosmetics.OUTFITS.length); i++) {
+						if (!outfits.get(i).isJsonArray())
+							continue;
+						var parts = outfits.get(i).getAsJsonArray();
+						if (parts.size() == 3)
+							Cosmetics.OUTFITS[i] = new String[] { parts.get(0).getAsString(), parts.get(1).getAsString(), parts.get(2).getAsString() };
+					}
+				}
 			}
 			for (var module : Modules.ALL) {
 				if (root == null || !root.has(module.id))
@@ -124,6 +145,25 @@ public final class ZyroxConfig {
 		settings.addProperty("lyricsOffsetMs", MusicManager.offsetMs);
 		settings.addProperty("skyLyrics", MusicManager.skyLyrics);
 		settings.addProperty("skySize", MusicManager.skySize);
+		settings.addProperty("motionBlur", Effects.motionBlur);
+		settings.addProperty("menuBlur", Effects.menuBlur);
+		settings.addProperty("menuSounds", Sounds.volume);
+		settings.addProperty("classicSounds", Sounds.classic);
+		var favorites = new JsonArray();
+		Cosmetics.FAVORITES.forEach(favorites::add);
+		settings.add("favorites", favorites);
+		var outfits = new JsonArray();
+		for (var outfit : Cosmetics.OUTFITS) {
+			if (outfit == null) {
+				outfits.add(JsonNull.INSTANCE);
+				continue;
+			}
+			var parts = new JsonArray();
+			for (var part : outfit)
+				parts.add(part);
+			outfits.add(parts);
+		}
+		settings.add("outfits", outfits);
 		root.add(SETTINGS, settings);
 		for (var module : Modules.ALL) {
 			var saved = new JsonObject();

@@ -324,14 +324,78 @@ def friends_shape(draw, s):
     draw.pieslice(box(s, 62, 74, 120, 132), 180, 360, fill=WHITE)
 
 
+def day_shape(draw, s):
+    draw.ellipse(box(s, 40, 40, 88, 88), fill=WHITE)
+    import math
+    for index in range(8):
+        angle = index * math.pi / 4
+        x, y = 64 + math.cos(angle) * 44, 64 + math.sin(angle) * 44
+        draw.line(box(s, 64 + math.cos(angle) * 32, 64 + math.sin(angle) * 32, x, y), fill=WHITE, width=10 * s)
+
+
+def biome_shape(draw, s):
+    draw.polygon([(x * s, y * s) for x, y in [(64, 8), (106, 70), (22, 70)]], fill=WHITE)
+    draw.polygon([(x * s, y * s) for x, y in [(64, 36), (114, 100), (14, 100)]], fill=WHITE)
+    draw.rectangle(box(s, 56, 100, 72, 122), fill=WHITE)
+
+
+def light_shape(draw, s):
+    draw.ellipse(box(s, 30, 8, 98, 76), fill=WHITE)
+    draw.rectangle(box(s, 46, 60, 82, 92), fill=WHITE)
+    draw.rounded_rectangle(box(s, 46, 98, 82, 108), 4 * s, fill=WHITE)
+    draw.rounded_rectangle(box(s, 52, 112, 76, 120), 4 * s, fill=WHITE)
+    draw.line(box(s, 54, 46, 64, 60), fill=CLEAR, width=6 * s)
+    draw.line(box(s, 74, 46, 64, 60), fill=CLEAR, width=6 * s)
+
+
+def session_shape(draw, s):
+    draw.rounded_rectangle(box(s, 24, 8, 104, 20), 5 * s, fill=WHITE)
+    draw.rounded_rectangle(box(s, 24, 108, 104, 120), 5 * s, fill=WHITE)
+    draw.polygon([(x * s, y * s) for x, y in [(34, 20), (94, 20), (64, 64)]], fill=WHITE)
+    draw.polygon([(x * s, y * s) for x, y in [(64, 64), (94, 108), (34, 108)]], outline=WHITE, width=8 * s)
+    draw.polygon([(x * s, y * s) for x, y in [(64, 80), (84, 104), (44, 104)]], fill=WHITE)
+
+
+def players_shape(draw, s):
+    friends_shape(draw, s)
+
+
+def target_shape(draw, s):
+    draw.ellipse(box(s, 14, 14, 114, 114), outline=WHITE, width=10 * s)
+    draw.ellipse(box(s, 40, 40, 88, 88), outline=WHITE, width=10 * s)
+    draw.ellipse(box(s, 58, 58, 70, 70), fill=WHITE)
+    for line in [(64, 2, 64, 26), (64, 102, 64, 126), (2, 64, 26, 64), (102, 64, 126, 64)]:
+        draw.line(box(s, *line), fill=WHITE, width=8 * s)
+
+
+def fight_stats_shape(draw, s):
+    for index, height in enumerate((50, 90, 70)):
+        left = 16 + index * 34
+        draw.rounded_rectangle(box(s, left, 116 - height, left + 26, 116), 6 * s, fill=WHITE)
+
+
+def cooldown_shape(draw, s):
+    draw.ellipse(box(s, 14, 14, 114, 114), outline=(255, 255, 255, 90), width=12 * s)
+    draw.arc(box(s, 14, 14, 114, 114), -90, 180, fill=WHITE, width=12 * s)
+    draw.polygon([(x * s, y * s) for x, y in [(70, 30), (46, 68), (62, 68), (56, 98), (82, 58), (66, 58)]], fill=WHITE)
+
+
+def durability_shape(draw, s):
+    draw.polygon([(x * s, y * s) for x, y in [(108, 10), (118, 20), (60, 82), (46, 68)]], fill=WHITE)
+    draw.line(box(s, 30, 62, 66, 98), fill=WHITE, width=10 * s)
+    draw.line(box(s, 42, 86, 20, 108), fill=WHITE, width=12 * s)
+    draw.rounded_rectangle(box(s, 8, 116, 120, 124), 4 * s, fill=(255, 255, 255, 90))
+    draw.rounded_rectangle(box(s, 8, 116, 80, 124), 4 * s, fill=WHITE)
+
+
 (ASSETS / "textures/gui").mkdir(parents=True, exist_ok=True)
 write_icon("friends", friends_shape)
 write_icon("staff", staff_shape)
 (ASSETS / "textures/icon/pvp").mkdir(parents=True, exist_ok=True)
-for pvp, shape in {"combo": combo_shape, "reach": reach_shape, "item_counter": items_shape, "block_counter": blocks_shape, "armor_warning": armor_warning_shape, "low_health": low_health_shape}.items():
+for pvp, shape in {"combo": combo_shape, "reach": reach_shape, "item_counter": items_shape, "block_counter": blocks_shape, "armor_warning": armor_warning_shape, "low_health": low_health_shape, "target_hud": target_shape, "fight_stats": fight_stats_shape, "cooldown": cooldown_shape, "durability": durability_shape}.items():
     write_icon("pvp/" + pvp, shape)
 (ASSETS / "textures/icon/hud").mkdir(parents=True, exist_ok=True)
-for hud, shape in {"fps": fps_shape, "coordinates": coordinates_shape, "cps": cps_shape, "keystrokes": keystrokes_shape, "ping": ping_shape, "compass": compass_shape, "speed": speed_shape, "clock": clock_shape, "memory": memory_shape, "server": server_shape, "armor": armor_shape, "effects": effects_shape}.items():
+for hud, shape in {"fps": fps_shape, "coordinates": coordinates_shape, "cps": cps_shape, "keystrokes": keystrokes_shape, "ping": ping_shape, "compass": compass_shape, "speed": speed_shape, "clock": clock_shape, "memory": memory_shape, "server": server_shape, "armor": armor_shape, "effects": effects_shape, "day": day_shape, "biome": biome_shape, "light": light_shape, "session": session_shape, "players": players_shape}.items():
     write_icon("hud/" + hud, shape)
 for cape, art in {"zyrox": zyrox(), "nebula": nebula(), "inferno": inferno(), "glacier": glacier(), "circuit": circuit()}.items():
     write_cape(cape, art)

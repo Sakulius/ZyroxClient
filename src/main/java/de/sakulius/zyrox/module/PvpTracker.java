@@ -13,6 +13,8 @@ public final class PvpTracker {
 	private static final int CONFIRM_TICKS = 12;
 	private static final int COMBO_TICKS = 60;
 	private static final int REACH_TICKS = 100;
+	private static final int TARGET_TICKS = 160;
+	private static final int FIGHT_TICKS = 200;
 
 	private static LivingEntity pending;
 	private static float pendingReach;
@@ -21,12 +23,29 @@ public final class PvpTracker {
 	private static float reach = -1f;
 	private static int sinceHit;
 	private static boolean wasHurt;
+	private static LivingEntity target;
+	private static int targetTicks;
+	private static int hits;
+	private static int taken;
+	private static int sinceFight = FIGHT_TICKS;
 
 	private PvpTracker() {
 	}
 
 	public static int combo() {
 		return combo;
+	}
+
+	public static LivingEntity target() {
+		return target;
+	}
+
+	public static int hits() {
+		return hits;
+	}
+
+	public static int taken() {
+		return taken;
 	}
 
 	public static float reach() {
@@ -62,11 +81,18 @@ public final class PvpTracker {
 			combo = 0;
 			reach = -1f;
 			wasHurt = false;
+			target = null;
+			hits = 0;
+			taken = 0;
 			return;
 		}
 		if (pending != null) {
 			if (pending.hurtTime > 0) {
 				combo++;
+				hits++;
+				sinceFight = 0;
+				target = pending;
+				targetTicks = TARGET_TICKS;
 				reach = pendingReach;
 				sinceHit = 0;
 				pending = null;
@@ -75,8 +101,21 @@ public final class PvpTracker {
 			}
 		}
 		boolean hurt = player.hurtTime > 0;
-		if (hurt && !wasHurt)
+		if (hurt && !wasHurt) {
 			combo = 0;
+			taken++;
+			sinceFight = 0;
+		}
+		if (client.crosshairPickEntity instanceof LivingEntity looked && looked != player && looked.isAlive()) {
+			target = looked;
+			targetTicks = TARGET_TICKS;
+		}
+		if (target != null && (--targetTicks <= 0 || !target.isAlive() || target.isRemoved()))
+			target = null;
+		if (++sinceFight > FIGHT_TICKS) {
+			hits = 0;
+			taken = 0;
+		}
 		wasHurt = hurt;
 		sinceHit++;
 		if (sinceHit > COMBO_TICKS)

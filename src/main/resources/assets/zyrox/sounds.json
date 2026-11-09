@@ -1,0 +1,79 @@
+{
+  "ui.hover": {
+    "sounds": [
+      {
+        "name": "zyrox:ui/hover"
+      }
+    ]
+  },
+  "ui.click": {
+    "sounds": [
+      {
+        "name": "zyrox:ui/click"
+      }
+    ]
+  },
+  "ui.toggle_on": {
+    "sounds": [
+      {
+        "name": "zyrox:ui/toggle_on"
+      }
+    ]
+  },
+  "ui.toggle_off": {
+    "sounds": [
+      {
+        "name": "zyrox:ui/toggle_off"
+      }
+    ]
+  },
+  "ui.open": {
+    "sounds": [
+      {
+        "name": "zyrox:ui/open"
+      }
+    ]
+  },
+  "ui.close": {
+    "sounds": [
+      {
+        "name": "zyrox:ui/close"
+      }
+    ]
+  },
+  "ui.slide": {
+    "sounds": [
+      {
+        "name": "zyrox:ui/slide"
+      }
+    ]
+  },
+  "ui.tab": {
+    "sounds": [
+      {
+        "name": "zyrox:ui/tab"
+      }
+    ]
+  },
+  "ui.locked": {
+    "sounds": [
+      {
+        "name": "zyrox:ui/locked"
+      }
+    ]
+  },
+  "ui.type": {
+    "sounds": [
+      {
+        "name": "zyrox:ui/type"
+      }
+    ]
+  },
+  "ui.equip": {
+    "sounds": [
+      {
+        "name": "zyrox:ui/equip"
+      }
+    ]
+  }
+}

@@ -7,6 +7,7 @@ import java.util.List;
 import net.minecraft.client.Minecraft;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.level.LightLayer;
 import net.minecraft.world.item.BlockItem;
 
 public final class Modules {
@@ -49,6 +50,11 @@ public final class Modules {
 		new TextHudModule("memory", "Memory", "Java memory use", false, RIGHT, 72, Modules::memory),
 		new TextHudModule("server", "Server", "Server address", false, RIGHT, 89, Modules::server),
 		new ArmorModule(RIGHT, 106),
+		new TextHudModule("day", "Day", "Days in this world", false, RIGHT, 180, Modules::day),
+		new TextHudModule("biome", "Biome", "Where you are", false, RIGHT, 197, Modules::biome),
+		new TextHudModule("light", "Light", "Block light, mobs spawn at 0", false, RIGHT, 214, Modules::light),
+		new TextHudModule("session", "Session", "Time played today", false, RIGHT, 231, Modules::session),
+		new TextHudModule("players", "Players", "Players on the server", false, RIGHT, 248, Modules::players),
 		new EffectsModule(90, 4),
 		LYRICS,
 		NOW_PLAYING,
@@ -62,12 +68,77 @@ public final class Modules {
 		new TextHudModule("reach", "Reach", "Distance of your last hit", Module.Category.PVP, CENTER, 147,
 			client -> PvpTracker.reachText()),
 		new ItemCounterModule(4, 140),
+		new TargetHudModule(CENTER, 40),
+		new TextHudModule("fight_stats", "Fight Stats", "Hits dealt and taken", Module.Category.PVP, CENTER, 181,
+			client -> PvpTracker.hits() + " Hits  " + PvpTracker.taken() + " Taken"),
+		new TextHudModule("cooldown", "Cooldown", "Attack charge", Module.Category.PVP, CENTER, 198, Modules::cooldown),
+		new TextHudModule("durability", "Durability", "Weapon in your hand", Module.Category.PVP, CENTER, 215, Modules::durability),
 		new TextHudModule("block_counter", "Blocks", "Blocks in your inventory", Module.Category.PVP, CENTER, 164, Modules::blocks),
 		new WarningModule("armor_warning", "Armor Alert", "Warns before armor breaks", CENTER, 96, "Armor low", Modules::armorWarning),
 		new WarningModule("low_health", "Low Health", "Warns at three hearts", CENTER, 80, "Low health", Modules::healthWarning),
 		WAYPOINTS);
 
+	private static final long STARTED = System.currentTimeMillis();
+	private static final long TICKS_PER_DAY = 24000;
+
 	private Modules() {
+	}
+
+	private static String day(Minecraft client) {
+		return client.level == null ? "Day -" : "Day " + (client.level.getOverworldClockTime() / TICKS_PER_DAY + 1);
+	}
+
+	private static String biome(Minecraft client) {
+		if (client.level == null || client.player == null)
+			return "-";
+		return client.level.getBiome(client.player.blockPosition()).unwrapKey()
+			.map(key -> pretty(key.identifier().getPath())).orElse("-");
+	}
+
+	private static String pretty(String path) {
+		var words = path.replace('/', ' ').split("_");
+		var out = new StringBuilder();
+		for (var word : words) {
+			if (word.isEmpty())
+				continue;
+			if (!out.isEmpty())
+				out.append(' ');
+			out.append(Character.toUpperCase(word.charAt(0))).append(word.substring(1));
+		}
+		return out.toString();
+	}
+
+	private static String light(Minecraft client) {
+		if (client.level == null || client.player == null)
+			return "Light -";
+		return "Light " + client.level.getBrightness(LightLayer.BLOCK, client.player.blockPosition());
+	}
+
+	private static String session(Minecraft client) {
+		long minutes = (System.currentTimeMillis() - STARTED) / 60_000;
+		return minutes < 60 ? minutes + " min" : "%d h %02d min".formatted(minutes / 60, minutes % 60);
+	}
+
+	private static String players(Minecraft client) {
+		if (client.getConnection() == null)
+			return "- online";
+		return client.getConnection().getOnlinePlayers().size() + " online";
+	}
+
+	private static String cooldown(Minecraft client) {
+		if (client.player == null)
+			return "- %";
+		float charge = client.player.getAttackStrengthScale(0f);
+		return charge >= 1f ? "Ready" : Math.round(charge * 100) + " %";
+	}
+
+	private static String durability(Minecraft client) {
+		if (client.player == null)
+			return "-";
+		var stack = client.player.getMainHandItem();
+		if (!stack.isDamageableItem() || stack.getMaxDamage() <= 0)
+			return "No tool";
+		return (stack.getMaxDamage() - stack.getDamageValue()) + " / " + stack.getMaxDamage();
 	}
 
 	private static String blocks(Minecraft client) {

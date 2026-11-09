@@ -19,11 +19,13 @@ import de.sakulius.zyrox.music.MusicManager;
 import de.sakulius.zyrox.music.SkyLyrics;
 import de.sakulius.zyrox.music.WindowsMediaSession;
 import java.util.ArrayList;
-import java.util.Comparator;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Random;
 import java.util.UUID;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
@@ -35,20 +37,22 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.PlayerFaceExtractor;
 import net.minecraft.world.entity.player.PlayerSkin;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.CharacterEvent;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.renderer.RenderPipelines;
-import net.minecraft.client.resources.sounds.SimpleSoundInstance;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
-import net.minecraft.sounds.SoundEvents;
 import org.joml.Matrix3x2f;
 
 public class ZyroxScreen extends Screen {
 	private record Page(String id, String title, String description, Identifier icon, float orbit, Supplier<List<Row>> rows) {
 	}
 
-	private record Tile(String name, BooleanSupplier chosen, Runnable choose, TilePreview preview, BooleanSupplier locked) {
+	private record Tile(String key, String name, String detail, BooleanSupplier chosen, Runnable choose, TilePreview preview, BooleanSupplier locked, Runnable tryOn) {
+		boolean cosmetic() {
+			return tryOn != null;
+		}
 	}
 
 	private interface TilePreview {
@@ -58,6 +62,8 @@ public class ZyroxScreen extends Screen {
 	private abstract static class Row {
 		final String id;
 		final int height;
+		String label;
+		boolean keep;
 
 		Row(String id, int height) {
 			this.id = id;
@@ -77,13 +83,21 @@ public class ZyroxScreen extends Screen {
 	private static final float SCROLL_SPEED = 11f;
 	private static final float CAROUSEL_X = 0.66f;
 	private static final float CARD_RADIUS = 10f;
-	private static final float PANEL_RADIUS = 10f;
+private static final float PANEL_RADIUS = 12f;
 	private static final float ROW_RADIUS = 6f;
+	private static final float MORPH_SPEED = 3.2f;
+	private static final float CONTENT_SPEED = 2.6f;
+	private static final float ROW_STAGGER = 0.05f;
 	private static final int ICON_SIZE = 128;
 	private static final int ROW_GAP = 2;
 	private static final int ROW_HEIGHT = 30;
-	private static final int PANEL_MARGIN = 12;
-	private static final int PANEL_HEADER = 32;
+	private static final int PANEL_MARGIN = 14;
+	private static final int PANEL_HEADER = 38;
+	private static final int PANEL_MIN_WIDTH = 330;
+	private static final int INFO_HEIGHT = 22;
+	private static final int SEARCH_WIDTH = 120;
+	private static final int SEARCH_HEIGHT = 18;
+	private static final int OUTFIT_HEIGHT = 44;
 	private static final int DONE_WIDTH = 60;
 	private static final int DONE_HEIGHT = 18;
 	private static final int SWATCH = 14;
@@ -126,12 +140,25 @@ public class ZyroxScreen extends Screen {
 	private static final int SHADOW = 0x90000000;
 	private static final int BLACK = 0xFF000000;
 
+	private static final Random RANDOM = new Random();
+
 	private static int cosmeticTab;
 	private static boolean legacyCapes;
 	private static int hudTab;
 
 	private final Map<String, Float> toggleAnim = new HashMap<>();
+	private final Map<String, Float> hoverAnim = new HashMap<>();
 	private final List<Page> pages;
+
+	private String search = "";
+	private boolean searchFocused;
+	private float contentAnim;
+	private String contentKey = "";
+	private String hoverKey;
+	private String lastHoverKey;
+	private Tile hoveredTile;
+	private float morph;
+	private float[] morphFrom;
 
 	private long lastFrame = System.nanoTime();
 	private float dt;
@@ -226,13 +253,24 @@ public class ZyroxScreen extends Screen {
 		Draw.roundRect(graphics, knobX, y + 2, SWITCH_HEIGHT - 4, SWITCH_HEIGHT - 4, (SWITCH_HEIGHT - 4) / 2f, Fx.alpha(TEXT, alpha));
 	}
 
+	private static Row labeled(Row row, String label) {
+		row.label = label;
+		return row;
+	}
+
+	private boolean hover(String key, boolean inside) {
+		if (inside)
+			hoverKey = key;
+		return inside;
+	}
+
 	private Row toggle(String id, String name, String detail, BooleanSupplier on, Consumer<Boolean> set) {
-		return new Row(id, ROW_HEIGHT) {
+		return labeled(new Row(id, ROW_HEIGHT) {
 			@Override
 			void draw(GuiGraphicsExtractor graphics, int x, int y, int w, int mouseX, int mouseY, float alpha) {
 				float anim = Fx.approach(toggleAnim.getOrDefault(id, on.getAsBoolean() ? 1f : 0f), on.getAsBoolean() ? 1f : 0f, dt, 16f);
 				toggleAnim.put(id, anim);
-				if (inside(mouseX, mouseY, x, y, w, height))
+				if (hover(id, inside(mouseX, mouseY, x, y, w, height)))
 					Draw.roundRect(graphics, x, y, w, height, ROW_RADIUS, Fx.alpha(HOVER, alpha));
 				Type.SEMIBOLD.draw(graphics, font, name, x + 8, y + 6, Fx.alpha(TEXT, alpha));
 				Type.REGULAR.draw(graphics, font, detail, x + 8, y + 17, Fx.alpha(MUTED, alpha));
@@ -243,16 +281,16 @@ public class ZyroxScreen extends Screen {
 			void click(double mouseX, int x, int y, int w) {
 				boolean value = !on.getAsBoolean();
 				set.accept(value);
-				playClick(value ? 1.5f : 0.8f);
+				(value ? Sounds.TOGGLE_ON : Sounds.TOGGLE_OFF).play();
 			}
-		};
+		}, name + " " + detail);
 	}
 
 	private Row select(String id, String name, Supplier<List<String>> values, IntSupplier get, IntConsumer set) {
-		return new Row(id, ROW_HEIGHT) {
+		return labeled(new Row(id, ROW_HEIGHT) {
 			@Override
 			void draw(GuiGraphicsExtractor graphics, int x, int y, int w, int mouseX, int mouseY, float alpha) {
-				if (inside(mouseX, mouseY, x, y, w, height))
+				if (hover(id, inside(mouseX, mouseY, x, y, w, height)))
 					Draw.roundRect(graphics, x, y, w, height, ROW_RADIUS, Fx.alpha(HOVER, alpha));
 				Type.SEMIBOLD.draw(graphics, font, name, x + 8, y + 11, Fx.alpha(TEXT, alpha));
 				Type.REGULAR.draw(graphics, font, "‹", x + w - 90, y + 11, Fx.alpha(MUTED, alpha));
@@ -265,26 +303,27 @@ public class ZyroxScreen extends Screen {
 				int count = values.get().size();
 				int step = mouseX < x + w - 48 ? count - 1 : 1;
 				set.accept((get.getAsInt() + step) % count);
-				playClick(1.3f);
+				Sounds.TAB.play(step == 1 ? 1.1f : 0.9f);
 			}
-		};
+		}, name);
 	}
 
 	private Row button(String id, String name, Runnable action) {
-		return new Row(id, 24) {
+		return labeled(new Row(id, 24) {
 			@Override
 			void draw(GuiGraphicsExtractor graphics, int x, int y, int w, int mouseX, int mouseY, float alpha) {
-				boolean hovered = inside(mouseX, mouseY, x, y, w, height);
-				Draw.roundRect(graphics, x, y, w, height, ROW_RADIUS, Fx.alpha(Fx.mix(ZyroxTheme.accent(), TEXT, hovered ? 0.12f : 0f), alpha));
+				boolean hovered = hover(id, inside(mouseX, mouseY, x, y, w, height));
+				float lift = hoverAmount(id, hovered);
+				Draw.roundRect(graphics, x, y, w, height, ROW_RADIUS, Fx.alpha(Fx.mix(ZyroxTheme.accent(), TEXT, lift * 0.14f), alpha));
 				Type.SEMIBOLD.centered(graphics, font, name, x + w / 2, y + 8, Fx.alpha(TEXT, alpha));
 			}
 
 			@Override
 			void click(double mouseX, int x, int y, int w) {
 				action.run();
-				playClick(1f);
+				Sounds.CLICK.play();
 			}
-		};
+		}, name);
 	}
 
 	private Row note(String text) {
@@ -301,7 +340,7 @@ public class ZyroxScreen extends Screen {
 	}
 
 	private Row swatches() {
-		return new Row("theme", 40) {
+		return labeled(new Row("theme", 40) {
 			@Override
 			void draw(GuiGraphicsExtractor graphics, int x, int y, int w, int mouseX, int mouseY, float alpha) {
 				Type.SEMIBOLD.draw(graphics, font, "Accent color", x + 8, y + 5, Fx.alpha(TEXT, alpha));
@@ -321,10 +360,10 @@ public class ZyroxScreen extends Screen {
 				int index = (int) (mouseX - x - 8) / (SWATCH + 6);
 				if (mouseX >= x + 8 && index < ZyroxTheme.CHOICES.size()) {
 					ZyroxTheme.index = index;
-					playClick(1.4f);
+					Sounds.TAB.play(1.2f);
 				}
 			}
-		};
+		}, "Accent color theme");
 	}
 
 	private Row moduleToggle(Module module) {
@@ -334,17 +373,24 @@ public class ZyroxScreen extends Screen {
 	private List<Row> hudRows() {
 		var rows = new ArrayList<Row>();
 		rows.add(button("edit", "Edit HUD layout", this::enterEdit));
+		var tiles = new ArrayList<Tile>();
+		for (var module : Modules.ALL)
+			if (module.category == Module.Category.HUD)
+				tiles.add(moduleTile(module, icon("hud/" + module.id), ICON_SIZE));
+		if (searching()) {
+			rows.add(tileGrid(tiles));
+			hudStyleRows(rows);
+			return rows;
+		}
 		rows.add(tabs("hud-tabs", HUD_TABS, () -> hudTab, index -> hudTab = index));
 		if (hudTab == 1) {
 			hudStyleRows(rows);
 			return rows;
 		}
-		var tiles = new ArrayList<Tile>();
-		for (var module : Modules.ALL)
-			if (module.category == Module.Category.HUD)
-				tiles.add(moduleTile(module, icon("hud/" + module.id), ICON_SIZE));
+		long on = tiles.stream().filter(tile -> tile.chosen().getAsBoolean()).count();
+		rows.add(countHeading("hud-count", "Elements", on + " on"));
 		rows.add(tileGrid(tiles));
-		rows.add(note("Click a tile to turn it on or off."));
+		rows.add(note("Click a tile to turn it on or off. Type to search."));
 		return rows;
 	}
 
@@ -398,7 +444,7 @@ public class ZyroxScreen extends Screen {
 	}
 
 	private Row colorRow(String id, String name, List<HudStyle.Swatch> colors, IntSupplier get, IntConsumer set) {
-		return new Row(id, 40) {
+		return labeled(new Row(id, 40) {
 			@Override
 			void draw(GuiGraphicsExtractor graphics, int x, int y, int w, int mouseX, int mouseY, float alpha) {
 				var chosen = colors.get(Math.clamp(get.getAsInt(), 0, colors.size() - 1)).name();
@@ -419,28 +465,62 @@ public class ZyroxScreen extends Screen {
 				int index = (int) (mouseX - x - 8) / (SWATCH + 6);
 				if (mouseX >= x + 8 && index < colors.size()) {
 					set.accept(index);
-					playClick(1.4f);
+					Sounds.TAB.play(1.2f);
 				}
 			}
-		};
+		}, name);
 	}
 
 	private Tile moduleTile(Module module, Identifier image, int imageSize) {
-		return new Tile(module.name, () -> module.enabled, () -> module.enabled = !module.enabled, (graphics, x, y, size, alpha) -> {
+		return new Tile(module.id, module.name, module.description, () -> module.enabled, () -> {
+			module.enabled = !module.enabled;
+			(module.enabled ? Sounds.TOGGLE_ON : Sounds.TOGGLE_OFF).play();
+		}, (graphics, x, y, size, alpha) -> {
 			int shown = size * 3 / 4;
 			graphics.blit(RenderPipelines.GUI_TEXTURED, image, x + (size - shown) / 2, y + (size - shown) / 2, 0f, 0f, shown, shown, imageSize, imageSize, imageSize, imageSize, Fx.alpha(TEXT, module.enabled ? alpha : alpha * 0.35f));
-		}, () -> false);
+		}, () -> false, null);
+	}
+
+	private List<Tile> cosmeticTiles(int tab, boolean legacy) {
+		return switch (tab) {
+			case 0 -> capeTiles(legacy ? Cosmetics.LEGACY_CAPES : Cosmetics.CAPES);
+			case 1 -> hatTiles();
+			default -> auraTiles();
+		};
+	}
+
+	private List<String> cosmeticTabLabels() {
+		var labels = new ArrayList<String>();
+		for (int i = 0; i < COSMETIC_TABS.size(); i++) {
+			var tiles = cosmeticTiles(i, false);
+			long owned = tiles.stream().filter(tile -> !tile.locked().getAsBoolean()).count();
+			labels.add(COSMETIC_TABS.get(i) + "  " + owned + "/" + tiles.size());
+		}
+		return labels;
 	}
 
 	private List<Row> cosmeticRows() {
 		var rows = new ArrayList<Row>();
 		boolean team = Roles.own() != null;
+		if (searching()) {
+			var all = new ArrayList<Tile>();
+			for (int i = 0; i < COSMETIC_TABS.size(); i++)
+				all.addAll(cosmeticTiles(i, false));
+			if (team)
+				all.addAll(capeTiles(Cosmetics.LEGACY_CAPES));
+			rows.add(wearing());
+			rows.add(tileGrid("grid", sortedTiles(all, false)));
+			rows.add(tileGrid("grid-locked", sortedTiles(all, true)));
+			return rows;
+		}
 		boolean legacy = cosmeticTab == 0 && legacyCapes && team;
-		rows.add(tabs("tabs", COSMETIC_TABS, () -> cosmeticTab, index -> {
+		rows.add(tabs("tabs", cosmeticTabLabels(), () -> cosmeticTab, index -> {
 			cosmeticTab = index;
 			legacyCapes = false;
 		}));
 		rows.add(wearing());
+		rows.add(cosmeticActions());
+		rows.add(outfits());
 		if (cosmeticTab == 0 && team) {
 			rows.add(button("legacy-capes", legacy ? "Back to capes" : "Legacy capes  \u00b7  Team only", () -> {
 				legacyCapes = !legacyCapes;
@@ -448,11 +528,12 @@ public class ZyroxScreen extends Screen {
 				panelScrollTarget = 0;
 			}));
 		}
-		var tiles = switch (cosmeticTab) {
-			case 0 -> capeTiles(legacy ? Cosmetics.LEGACY_CAPES : Cosmetics.CAPES);
-			case 1 -> hatTiles();
-			default -> auraTiles();
-		};
+		var tiles = cosmeticTiles(cosmeticTab, legacy);
+		var favorites = tiles.stream().filter(tile -> Cosmetics.FAVORITES.contains(tile.key()) && !tile.locked().getAsBoolean()).toList();
+		if (!favorites.isEmpty()) {
+			rows.add(countHeading("favorites", "\u2605  Favorites", String.valueOf(favorites.size())));
+			rows.add(tileGrid("grid-favorites", favorites));
+		}
 		var unlocked = sortedTiles(tiles, false);
 		var locked = sortedTiles(tiles, true);
 		rows.add(countHeading("unlocked", legacy ? "Legacy capes" : "Unlocked", unlocked.size() + " / " + tiles.size()));
@@ -468,8 +549,116 @@ public class ZyroxScreen extends Screen {
 			rows.add(note("Hats step aside while you wear a helmet."));
 		else if (cosmeticTab == 2)
 			rows.add(note("Auras only show for you."));
+		rows.add(note("Hover anything to try it on, even locked ones."));
+		rows.add(note("Right click a tile to add it to your favorites."));
 		rows.add(note("Drag next to the player to look around."));
 		return rows;
+	}
+
+	private Row cosmeticActions() {
+		String[] labels = { "Randomize", "Take off all" };
+		return new Row("cosmetic-actions", 22) {
+			@Override
+			void draw(GuiGraphicsExtractor graphics, int x, int y, int w, int mouseX, int mouseY, float alpha) {
+				int width = (w - 16 - TILE_GAP) / 2;
+				for (int i = 0; i < labels.length; i++) {
+					int bx = x + 8 + i * (width + TILE_GAP);
+					boolean hovered = hover("cosmetic-action-" + i, inside(mouseX, mouseY, bx, y, width, height));
+					float lift = hoverAmount("cosmetic-action-" + i, hovered);
+					Draw.roundRect(graphics, bx, y, width, height, ROW_RADIUS, Fx.alpha(Fx.mix(0x1EFFFFFF, 0x38FFFFFF, lift), alpha));
+					Type.SEMIBOLD.centered(graphics, font, labels[i], bx + width / 2, y + 7, Fx.alpha(TEXT, alpha));
+				}
+			}
+
+			@Override
+			void click(double mouseX, int x, int y, int w) {
+				int width = (w - 16 - TILE_GAP) / 2;
+				if (mouseX < x + 8 + width) {
+					randomize();
+					Sounds.EQUIP.play(1.1f);
+				} else {
+					Cosmetics.capeId = Cosmetics.DEFAULT_CAPE;
+					Cosmetics.hatId = Cosmetics.NOTHING;
+					Cosmetics.aura = 0;
+					Sounds.CLOSE.play(1.2f);
+				}
+			}
+		};
+	}
+
+	private void randomize() {
+		var capes = Cosmetics.CAPES.stream().filter(cape -> Cosmetics.owns(cape.id())).toList();
+		var hats = Cosmetics.HATS.stream().filter(hat -> Cosmetics.owns(hat.id())).toList();
+		var auras = new ArrayList<Integer>();
+		for (int i = 0; i < Cosmetics.AURAS.size(); i++)
+			if (Cosmetics.owns(Cosmetics.auraId(Cosmetics.AURAS.get(i))))
+				auras.add(i);
+		if (!capes.isEmpty())
+			Cosmetics.capeId = capes.get(RANDOM.nextInt(capes.size())).id();
+		if (!hats.isEmpty())
+			Cosmetics.hatId = hats.get(RANDOM.nextInt(hats.size())).id();
+		if (!auras.isEmpty())
+			Cosmetics.aura = auras.get(RANDOM.nextInt(auras.size()));
+	}
+
+	private String outfitSummary(String[] outfit) {
+		if (outfit == null)
+			return "Empty";
+		var parts = new ArrayList<String>();
+		var cape = Cosmetics.capeById(outfit[0]);
+		if (cape != null && cape.texture() != null)
+			parts.add(cape.name());
+		var hat = Cosmetics.hatName(outfit[1]);
+		if (hat != null && !outfit[1].equals(Cosmetics.NOTHING))
+			parts.add(hat);
+		return parts.isEmpty() ? "Nothing" : String.join(", ", parts);
+	}
+
+	private Row outfits() {
+		return new Row("outfits", OUTFIT_HEIGHT) {
+			@Override
+			void draw(GuiGraphicsExtractor graphics, int x, int y, int w, int mouseX, int mouseY, float alpha) {
+				int count = Cosmetics.OUTFITS.length;
+				int width = (w - 16 - TILE_GAP * (count - 1)) / count;
+				int half = (width - 15) / 2;
+				for (int i = 0; i < count; i++) {
+					var outfit = Cosmetics.OUTFITS[i];
+					int bx = x + 8 + i * (width + TILE_GAP);
+					boolean hovered = hover("outfit-" + i, inside(mouseX, mouseY, bx, y, width, height));
+					float lift = hoverAmount("outfit-" + i, hovered);
+					boolean worn = outfit != null && Arrays.equals(outfit, Cosmetics.outfit());
+					Draw.roundRect(graphics, bx, y, width, height, ROW_RADIUS, Fx.alpha(Fx.mix(0x14FFFFFF, 0x2CFFFFFF, lift), alpha));
+					if (worn)
+						Draw.outline(graphics, bx - 1, y - 1, width + 2, height + 2, ROW_RADIUS + 1, Fx.alpha(ZyroxTheme.accent(), alpha));
+					Type.SEMIBOLD.draw(graphics, font, "Outfit " + (i + 1), bx + 6, y + 5, Fx.alpha(TEXT, alpha));
+					Type.REGULAR.draw(graphics, font, fitted(outfitSummary(outfit), width - 12), bx + 6, y + 16, Fx.alpha(MUTED, alpha));
+					if (outfit == null) {
+						smallButton(graphics, bx + 5, y + height - 16, width - 10, "Save current", 0x1EFFFFFF, mouseX, mouseY, alpha);
+						continue;
+					}
+					smallButton(graphics, bx + 5, y + height - 16, half, "Wear", ZyroxTheme.accent(), mouseX, mouseY, alpha);
+					smallButton(graphics, bx + 10 + half, y + height - 16, half, "Save", 0x1EFFFFFF, mouseX, mouseY, alpha);
+				}
+			}
+
+			@Override
+			void click(double mouseX, int x, int y, int w) {
+				int count = Cosmetics.OUTFITS.length;
+				int width = (w - 16 - TILE_GAP * (count - 1)) / count;
+				int index = (int) ((mouseX - x - 8) / (width + TILE_GAP));
+				if (mouseX < x + 8 || index >= count || clickY < y + height - 16)
+					return;
+				int bx = x + 8 + index * (width + TILE_GAP);
+				boolean save = Cosmetics.OUTFITS[index] == null || mouseX >= bx + 10 + (width - 15) / 2;
+				if (save) {
+					Cosmetics.OUTFITS[index] = Cosmetics.outfit();
+					Sounds.TOGGLE_ON.play();
+				} else {
+					Cosmetics.wear(Cosmetics.OUTFITS[index]);
+					Sounds.EQUIP.play();
+				}
+			}
+		};
 	}
 
 	private List<Tile> sortedTiles(List<Tile> tiles, boolean locked) {
@@ -496,7 +685,8 @@ public class ZyroxScreen extends Screen {
 		return new Row("wearing", 32) {
 			@Override
 			void draw(GuiGraphicsExtractor graphics, int x, int y, int w, int mouseX, int mouseY, float alpha) {
-				Draw.roundRect(graphics, x, y, w, height, ROW_RADIUS, Fx.alpha(0x14FFFFFF, alpha));
+				Draw.roundRect(graphics, x + 8, y, w - 16, height, ROW_RADIUS, Fx.alpha(0x14FFFFFF, alpha));
+				Draw.roundRect(graphics, x + 8, y + 6, 2, height - 12, 1f, Fx.alpha(ZyroxTheme.accent(), alpha));
 				var worn = new ArrayList<String>();
 				var cape = Cosmetics.capeById(Cosmetics.capeId);
 				if (cape != null && cape.texture() != null)
@@ -506,8 +696,8 @@ public class ZyroxScreen extends Screen {
 					worn.add(hat);
 				if (Cosmetics.aura > 0)
 					worn.add(Cosmetics.AURAS.get(Cosmetics.aura).name() + " Aura");
-				Type.REGULAR.draw(graphics, font, "Wearing", x + 8, y + 5, Fx.alpha(MUTED, alpha));
-				Type.SEMIBOLD.draw(graphics, font, fitted(worn.isEmpty() ? "Nothing yet" : String.join("  \u00b7  ", worn), w - 16), x + 8, y + 17, Fx.alpha(TEXT, alpha));
+				Type.REGULAR.draw(graphics, font, "Wearing", x + 16, y + 5, Fx.alpha(MUTED, alpha));
+				Type.SEMIBOLD.draw(graphics, font, fitted(worn.isEmpty() ? "Nothing yet" : String.join("  \u00b7  ", worn), w - 32), x + 16, y + 17, Fx.alpha(TEXT, alpha));
 			}
 
 			@Override
@@ -517,16 +707,18 @@ public class ZyroxScreen extends Screen {
 	}
 
 	private Row tabs(String id, List<String> labels, IntSupplier get, IntConsumer set) {
-		return new Row(id, TAB_HEIGHT) {
+		var row = new Row(id, TAB_HEIGHT) {
 			@Override
 			void draw(GuiGraphicsExtractor graphics, int x, int y, int w, int mouseX, int mouseY, float alpha) {
+				int tabWidth = tabWidth(w, labels.size());
+				Draw.roundRect(graphics, x + 6, y - 2, w - 12, height + 4, ROW_RADIUS + 2, Fx.alpha(0x10FFFFFF, alpha));
+				float slide = Fx.approach(hoverAnim.getOrDefault("tab-slide-" + id, (float) get.getAsInt()), get.getAsInt(), dt, 14f);
+				hoverAnim.put("tab-slide-" + id, slide);
+				Draw.roundRect(graphics, x + 8 + slide * (tabWidth + TILE_GAP), y, tabWidth, height, ROW_RADIUS, Fx.alpha(ZyroxTheme.accent(), alpha));
 				for (int i = 0; i < labels.size(); i++) {
 					int tabX = tabX(x, w, labels.size(), i);
-					int tabWidth = tabWidth(w, labels.size());
-					boolean hovered = inside(mouseX, mouseY, tabX, y, tabWidth, height);
-					if (i == get.getAsInt())
-						Draw.roundRect(graphics, tabX, y, tabWidth, height, ROW_RADIUS, Fx.alpha(ZyroxTheme.accent(), alpha));
-					else if (hovered)
+					boolean hovered = hover(id + "-" + i, inside(mouseX, mouseY, tabX, y, tabWidth, height));
+					if (hovered && i != get.getAsInt())
 						Draw.roundRect(graphics, tabX, y, tabWidth, height, ROW_RADIUS, Fx.alpha(HOVER, alpha));
 					Type.SEMIBOLD.centered(graphics, font, labels.get(i), tabX + tabWidth / 2, y + (height - 8) / 2, Fx.alpha(i == get.getAsInt() || hovered ? TEXT : MUTED, alpha));
 				}
@@ -536,15 +728,18 @@ public class ZyroxScreen extends Screen {
 			void click(double mouseX, int x, int y, int w) {
 				for (int i = 0; i < labels.size(); i++) {
 					if (mouseX >= tabX(x, w, labels.size(), i) && mouseX < tabX(x, w, labels.size(), i) + tabWidth(w, labels.size())) {
+						if (i != get.getAsInt())
+							Sounds.TAB.play();
 						set.accept(i);
 						panelScroll = 0;
 						panelScrollTarget = 0;
-						playClick(1.3f);
 						return;
 					}
 				}
 			}
 		};
+		row.keep = true;
+		return row;
 	}
 
 	private int tabWidth(int w, int count) {
@@ -558,13 +753,13 @@ public class ZyroxScreen extends Screen {
 	private List<Tile> capeTiles(List<Cosmetics.Cape> capes) {
 		var tiles = new ArrayList<Tile>();
 		for (var cape : capes) {
-			tiles.add(new Tile(cape.name(), () -> cape.id().equals(Cosmetics.capeId), () -> Cosmetics.capeId = cape.id(), (graphics, x, y, size, alpha) -> {
+			tiles.add(new Tile(cape.id(), cape.name(), "Cape", () -> cape.id().equals(Cosmetics.capeId), () -> Cosmetics.capeId = cape.id(), (graphics, x, y, size, alpha) -> {
 				int capeWidth = size * 10 / 16;
 				if (cape.texture() != null)
 					graphics.blit(RenderPipelines.GUI_TEXTURED, cape.texture().texturePath(), x + (size - capeWidth) / 2, y, 1f, 1f, capeWidth, size, 10, 16, 64, 32, Fx.alpha(TEXT, alpha));
 				else
 					Type.REGULAR.centered(graphics, font, "Own", x + size / 2, y + size / 2 - 4, Fx.alpha(MUTED, alpha));
-			}, () -> !Cosmetics.owns(cape.id())));
+			}, () -> !Cosmetics.owns(cape.id()), () -> Cosmetics.tryCape = cape.id()));
 		}
 		return tiles;
 	}
@@ -572,13 +767,13 @@ public class ZyroxScreen extends Screen {
 	private List<Tile> hatTiles() {
 		var tiles = new ArrayList<Tile>();
 		for (var wearable : Cosmetics.HATS) {
-			tiles.add(new Tile(wearable.name(), () -> wearable.id().equals(Cosmetics.hatId), () -> Cosmetics.hatId = wearable.id(), (graphics, x, y, size, alpha) -> {
+			tiles.add(new Tile(wearable.id(), wearable.name(), "Hat", () -> wearable.id().equals(Cosmetics.hatId), () -> Cosmetics.hatId = wearable.id(), (graphics, x, y, size, alpha) -> {
 				var preview = wearable.id().equals(Cosmetics.NOTHING) ? null : ModelPreview.of(wearable.id());
 				if (preview != null)
 					graphics.blit(RenderPipelines.GUI_TEXTURED, preview, x, y, 0f, 0f, size, size, ModelPreview.SIZE, ModelPreview.SIZE, ModelPreview.SIZE, ModelPreview.SIZE, Fx.alpha(TEXT, alpha));
 				else
 					nothingIcon(graphics, x, y, size, alpha);
-			}, () -> !Cosmetics.owns(wearable.id())));
+			}, () -> !Cosmetics.owns(wearable.id()), () -> Cosmetics.tryHat = wearable.id()));
 		}
 		return tiles;
 	}
@@ -588,14 +783,15 @@ public class ZyroxScreen extends Screen {
 		for (int i = 0; i < Cosmetics.AURAS.size(); i++) {
 			int index = i;
 			var aura = Cosmetics.AURAS.get(i);
-			tiles.add(new Tile(aura.name(), () -> Cosmetics.aura == index, () -> Cosmetics.aura = index, (graphics, x, y, size, alpha) -> {
+			tiles.add(new Tile(Cosmetics.auraId(aura), aura.name(), "Aura", () -> Cosmetics.aura == index, () -> Cosmetics.aura = index, (graphics, x, y, size, alpha) -> {
 				if (aura.particle() == null) {
 					nothingIcon(graphics, x, y, size, alpha);
 					return;
 				}
 				int icon = size * 3 / 4;
 				graphics.blit(RenderPipelines.GUI_TEXTURED, aura.icon(), x + (size - icon) / 2, y + (size - icon) / 2, 0f, 0f, icon, icon, aura.iconSize(), aura.iconSize(), aura.iconSize(), aura.iconSize(), Fx.alpha(TEXT, alpha));
-			}, () -> !Cosmetics.owns(Cosmetics.auraId(aura))));
+			}, () -> !Cosmetics.owns(Cosmetics.auraId(aura)), () -> {
+			}));
 		}
 		return tiles;
 	}
@@ -656,19 +852,34 @@ public class ZyroxScreen extends Screen {
 			@Override
 			void draw(GuiGraphicsExtractor graphics, int x, int y, int w, int mouseX, int mouseY, float alpha) {
 				int tileWidth = tileWidth(w);
+				int accent = ZyroxTheme.accent();
 				for (int i = 0; i < tiles.size(); i++) {
 					var tile = tiles.get(i);
 					int tx = tileX(x, w, i);
 					int ty = tileY(y, w, i);
-					boolean hovered = inside(mouseX, mouseY, tx, ty, tileWidth, TILE_HEIGHT);
-					Draw.roundRect(graphics, tx, ty, tileWidth, TILE_HEIGHT, 5f, Fx.alpha(hovered ? 0x30FFFFFF : 0x14FFFFFF, alpha));
+					String key = id + ":" + tile.key();
+					boolean hovered = hover(key, inside(mouseX, mouseY, tx, ty, tileWidth, TILE_HEIGHT) && mouseY >= rowsTop() && mouseY < rowsBottom());
+					if (hovered)
+						hoveredTile = tile;
+					float lift = hoverAmount(key, hovered);
+					boolean chosen = tile.chosen().getAsBoolean();
+					float pick = Fx.approach(toggleAnim.getOrDefault(key, chosen ? 1f : 0f), chosen ? 1f : 0f, dt, 12f);
+					toggleAnim.put(key, pick);
 					boolean locked = tile.locked().getAsBoolean();
-					tile.preview().draw(graphics, tx + (tileWidth - TILE_PREVIEW) / 2, ty + 3, TILE_PREVIEW, locked ? alpha * 0.3f : alpha);
-					Type.REGULAR.centered(graphics, font, fitted(tile.name(), tileWidth - 4), tx + tileWidth / 2, ty + TILE_PREVIEW + 6, Fx.alpha(tile.chosen().getAsBoolean() ? TEXT : MUTED, locked ? alpha * 0.6f : alpha));
+					float rise = lift * 2f;
+					if (pick > 0.01f)
+						Draw.glow(graphics, tx, ty - rise, tileWidth, TILE_HEIGHT, 6f, 5f, Fx.alpha(accent, 0.35f * pick * alpha));
+					Draw.roundRect(graphics, tx, ty - rise, tileWidth, TILE_HEIGHT, 6f, Fx.alpha(Fx.mix(Fx.mix(0x14FFFFFF, 0x30FFFFFF, lift), Fx.alpha(accent, 0.22f), pick * 0.6f), alpha));
+					tile.preview().draw(graphics, tx + (tileWidth - TILE_PREVIEW) / 2, (int) (ty + 3 - rise), TILE_PREVIEW, locked ? alpha * (0.3f + lift * 0.4f) : alpha);
+					Type.REGULAR.centered(graphics, font, fitted(tile.name(), tileWidth - 4), tx + tileWidth / 2, (int) (ty + TILE_PREVIEW + 6 - rise), Fx.alpha(chosen || lift > 0.5f ? TEXT : MUTED, locked ? alpha * 0.6f : alpha));
 					if (locked)
-						lockIcon(graphics, tx + tileWidth - 12, ty + 4, alpha);
-					if (tile.chosen().getAsBoolean())
-						Draw.outline(graphics, tx - 1, ty - 1, tileWidth + 2, TILE_HEIGHT + 2, 6f, Fx.alpha(ZyroxTheme.accent(), alpha));
+						lockIcon(graphics, tx + tileWidth - 12, (int) (ty + 4 - rise), alpha);
+					if (tile.cosmetic() && Cosmetics.FAVORITES.contains(tile.key()))
+						Type.REGULAR.draw(graphics, font, "\u2605", tx + 4, (int) (ty + 3 - rise), Fx.alpha(0xFFFFD25A, alpha));
+					if (!tile.cosmetic())
+						Draw.roundRect(graphics, tx + tileWidth - 9, ty + 4 - rise, 5, 5, 2.5f, Fx.alpha(Fx.mix(0x40FFFFFF, accent, pick), alpha));
+					if (pick > 0.01f)
+						Draw.outline(graphics, tx - 1, ty - 1 - rise, tileWidth + 2, TILE_HEIGHT + 2, 7f, Fx.alpha(accent, alpha * pick));
 				}
 			}
 
@@ -677,12 +888,14 @@ public class ZyroxScreen extends Screen {
 				int tileWidth = tileWidth(w);
 				for (int i = 0; i < tiles.size(); i++) {
 					if (inside(mouseX, clickY, tileX(x, w, i), tileY(y, w, i), tileWidth, TILE_HEIGHT)) {
-						if (tiles.get(i).locked().getAsBoolean()) {
-							playClick(0.6f);
+						var tile = tiles.get(i);
+						if (tile.locked().getAsBoolean()) {
+							Sounds.LOCKED.play();
 							return;
 						}
-						tiles.get(i).choose().run();
-						playClick(1.3f);
+						tile.choose().run();
+						if (tile.cosmetic())
+							Sounds.EQUIP.play();
 						return;
 					}
 				}
@@ -808,16 +1021,25 @@ public class ZyroxScreen extends Screen {
 		for (var module : Modules.ALL)
 			if (module.category == Module.Category.UTILITY)
 				rows.add(moduleToggle(module));
+		rows.add(select("utility-motion-blur", "Motion blur", () -> Effects.MOTION_BLUR, () -> Effects.motionBlur, value -> Effects.motionBlur = value));
 		return rows;
 	}
 
 	private List<Row> settingRows() {
 		return List.of(
+			heading("look", "Look"),
 			swatches(),
 			toggle("cinematic", "Camera move", "Swing out in front of you", () -> ZyroxTheme.cinematic, on -> {
 				ZyroxTheme.cinematic = on;
 				CameraRig.setActive(on);
-			}));
+			}),
+			heading("effects", "Effects"),
+			select("menu-blur", "Menu blur", () -> Effects.MENU_BLUR, () -> Effects.menuBlur, value -> Effects.menuBlur = value),
+			select("motion-blur", "Motion blur", () -> Effects.MOTION_BLUR, () -> Effects.motionBlur, value -> Effects.motionBlur = value),
+			note("Motion blur smooths fast camera turns in game."),
+			heading("sound", "Sound"),
+			select("menu-sounds", "Menu sounds", () -> Sounds.VOLUMES, () -> Sounds.volume, value -> Sounds.volume = value),
+			toggle("classic-sounds", "Classic clicks", "Use the Minecraft button sound", () -> Sounds.classic, on -> Sounds.classic = on));
 	}
 
 	private List<Row> pvpRows() {
@@ -829,9 +1051,12 @@ public class ZyroxScreen extends Screen {
 				tiles.add(moduleTile(module, icon("pvp/" + module.id), ICON_SIZE));
 		}
 		var rows = new ArrayList<Row>();
+		long on = tiles.stream().filter(tile -> tile.chosen().getAsBoolean()).count();
+		if (!searching())
+			rows.add(countHeading("pvp-count", "Fight helpers", on + " on"));
 		rows.add(tileGrid(tiles));
-		rows.add(note("Click a tile to turn it on or off."));
-		rows.add(note("Move them with Edit HUD layout."));
+		rows.add(button("pvp-edit", "Edit HUD layout", this::enterEdit));
+		rows.add(note("Click a tile to turn it on or off. Type to search."));
 		return rows;
 	}
 
@@ -1082,7 +1307,22 @@ public class ZyroxScreen extends Screen {
 	}
 
 	private float carouselX() {
-		return width * CAROUSEL_X + Fx.easeOutCubic(panelAmount) * width * 0.5f;
+		return width * CAROUSEL_X - Fx.easeInOutCubic(panelAmount) * width * 0.35f;
+	}
+
+	private float[] cardRect(float rel, float centerX) {
+		float side = Math.clamp(rel, -1f, 1f);
+		float amount = Math.abs(side);
+		float excess = Math.abs(rel) - amount;
+		float scale = 1f - (1f - SIDE_SCALE) * amount;
+		float w = cardWidth() * scale * (float) Math.cos(side * MAX_TILT);
+		float h = cardHeight() * scale;
+		float x = centerX + side * cardWidth() * 0.86f + Math.signum(rel) * excess * cardWidth() * 0.35f;
+		return new float[] { x - w / 2f, carouselY() - h / 2f, w, h };
+	}
+
+	private float[] panelRect() {
+		return new float[] { panelLeft(), panelTop(), panelRight() - panelLeft(), panelBottom() - panelTop() };
 	}
 
 	private int carouselY() {
@@ -1100,7 +1340,7 @@ public class ZyroxScreen extends Screen {
 	}
 
 	private int panelLeft() {
-		return (int) (width * 0.5f);
+		return Math.max(PANEL_MARGIN, Math.min((int) (width * 0.4f), width - PANEL_MARGIN - PANEL_MIN_WIDTH));
 	}
 
 	private int panelRight() {
@@ -1119,6 +1359,57 @@ public class ZyroxScreen extends Screen {
 		return panelTop() + PANEL_HEADER;
 	}
 
+	private int rowsBottom() {
+		return panelBottom() - INFO_HEIGHT - 4;
+	}
+
+	private int searchLeft() {
+		return panelRight() - SEARCH_WIDTH - 10;
+	}
+
+	private int searchTop() {
+		return panelTop() + (PANEL_HEADER - SEARCH_HEIGHT) / 2;
+	}
+
+	private boolean searching() {
+		return !search.isBlank();
+	}
+
+	private boolean matches(String text) {
+		return text != null && text.toLowerCase(Locale.ROOT).contains(search.trim().toLowerCase(Locale.ROOT));
+	}
+
+	private float hoverAmount(String key, boolean hovered) {
+		float value = Fx.approach(hoverAnim.getOrDefault(key, 0f), hovered ? 1f : 0f, dt, 14f);
+		hoverAnim.put(key, value);
+		return value;
+	}
+
+	private List<Row> shownRows() {
+		var rows = shownPanel.rows().get();
+		if (!searching())
+			return rows;
+		var out = new ArrayList<Row>();
+		boolean found = false;
+		for (var row : rows) {
+			if (row instanceof TileRow grid) {
+				var hits = grid.tiles.stream().filter(tile -> matches(tile.name()) || matches(tile.detail())).toList();
+				if (!hits.isEmpty()) {
+					out.add(tileGrid(grid.id, hits));
+					found = true;
+				}
+			} else if (row.label != null && matches(row.label)) {
+				out.add(row);
+				found = true;
+			} else if (row.keep) {
+				out.add(row);
+			}
+		}
+		if (!found)
+			out.add(note("Nothing found for \"" + search.trim() + "\""));
+		return out;
+	}
+
 	private int rowsHeight(List<Row> rows) {
 		int total = 0;
 		for (var row : rows)
@@ -1129,7 +1420,7 @@ public class ZyroxScreen extends Screen {
 	private int maxPanelScroll() {
 		if (panel == null)
 			return 0;
-		return Math.max(0, rowsHeight(panel.rows().get()) - (panelBottom() - 6 - rowsTop()));
+		return Math.max(0, rowsHeight(shownRows()) - (rowsBottom() - rowsTop()));
 	}
 
 	private int doneLeft() {
@@ -1160,6 +1451,10 @@ public class ZyroxScreen extends Screen {
 		return new int[] { (int) (width * CAROUSEL_X), carouselY() };
 	}
 
+	public int[] searchCenter() {
+		return new int[] { searchLeft() + SEARCH_WIDTH / 2, searchTop() + SEARCH_HEIGHT / 2 };
+	}
+
 	public int[] doneCenter() {
 		return new int[] { doneLeft() + DONE_WIDTH / 2, doneTop() + DONE_HEIGHT / 2 };
 	}
@@ -1179,7 +1474,7 @@ public class ZyroxScreen extends Screen {
 	public int[] tileCenter(int index) {
 		int x = panelLeft() + 6;
 		int w = panelRight() - panelLeft() - 14;
-		int rowHeight = panel.rows().get().stream().filter(entry -> entry.id.equals("grid")).findFirst().orElseThrow().height;
+		int rowHeight = shownRows().stream().filter(entry -> entry.id.equals("grid")).findFirst().orElseThrow().height;
 		int rowY = rowCenter("grid")[1] - rowHeight / 2;
 		return new int[] { tileX(x, w, index) + tileWidth(w) / 2, tileY(rowY, w, index) + TILE_HEIGHT / 2 };
 	}
@@ -1188,7 +1483,7 @@ public class ZyroxScreen extends Screen {
 		int x = panelLeft() + 6;
 		int w = panelRight() - panelLeft() - 14;
 		int y = rowsTop() - (int) panelScroll;
-		for (var row : panel.rows().get()) {
+		for (var row : shownRows()) {
 			if (row instanceof TileRow grid) {
 				for (int i = 0; i < grid.tiles.size(); i++)
 					if (grid.tiles.get(i).name().equals(name))
@@ -1199,8 +1494,23 @@ public class ZyroxScreen extends Screen {
 		throw new IllegalArgumentException(name);
 	}
 
+	public void revealTile(String name) {
+		reveal(tileNamed(name)[1] - TILE_HEIGHT / 2, TILE_HEIGHT);
+	}
+
+	public void revealRow(String id) {
+		reveal(rowCenter(id)[1] - 12, 24);
+	}
+
+	private void reveal(int top, int size) {
+		if (top >= rowsTop() && top + size <= rowsBottom())
+			return;
+		panelScroll = Math.clamp(panelScroll + top - rowsTop() - 8, 0, maxPanelScroll());
+		panelScrollTarget = panelScroll;
+	}
+
 	public boolean hasRow(String id) {
-		return panel.rows().get().stream().anyMatch(row -> row.id.equals(id));
+		return shownRows().stream().anyMatch(row -> row.id.equals(id));
 	}
 
 	public int[] rowCenterAt(String id, float across) {
@@ -1211,7 +1521,7 @@ public class ZyroxScreen extends Screen {
 
 	public int[] rowCenter(String id) {
 		int y = rowsTop() - (int) panelScroll;
-		for (var row : panel.rows().get()) {
+		for (var row : shownRows()) {
 			if (row.id.equals(id))
 				return new int[] { (panelLeft() + panelRight()) / 2, y + row.height / 2 };
 			y += row.height + ROW_GAP;
@@ -1239,11 +1549,22 @@ public class ZyroxScreen extends Screen {
 			}
 		}
 		position = Fx.approach(position, closestTarget(), dt, SCROLL_SPEED);
-		panelAmount = Fx.approach(panelAmount, panel != null ? 1f : 0f, dt, 11f);
+		float morphTarget = panel != null ? 1f : 0f;
+		panelAmount = morphTarget > panelAmount ? Math.min(morphTarget, panelAmount + dt * MORPH_SPEED) : Math.max(morphTarget, panelAmount - dt * MORPH_SPEED * 1.3f);
 		if (panel != null)
 			shownPanel = panel;
+		if (shownPanel != null) {
+			var key = shownPanel.id() + "/" + cosmeticTab + "/" + hudTab + "/" + legacyCapes + "/" + searching();
+			if (!key.equals(contentKey)) {
+				contentKey = key;
+				contentAnim = 0f;
+			}
+		}
+		contentAnim = Math.min(1f, contentAnim + dt * CONTENT_SPEED);
 		panelScroll = Fx.approach(panelScroll, panelScrollTarget, dt, 16f);
 		editAmount = Fx.approach(editAmount, editing ? 1f : 0f, dt, 12f);
+		boolean blurs = panel != null && !panel.id().equals("cosmetics") && !editing && !isClosing;
+		Effects.menuAmount = Fx.approach(Effects.menuAmount, blurs ? Fx.easeInOutCubic(panelAmount) : 0f, dt, 10f);
 		if (!editing)
 			CameraRig.look((float) mouseX / width, (float) mouseY / height);
 
@@ -1297,17 +1618,31 @@ public class ZyroxScreen extends Screen {
 			preview.extractRenderState(graphics, mouseX, mouseY, delta);
 		int menuX = editing ? -1000 : mouseX;
 		int menuY = editing ? -1000 : mouseY;
-		float carouselAlpha = fade * (1 - panelAmount);
+		hoverKey = null;
+		hoveredTile = null;
+		float carouselAlpha = fade * (1 - Fx.easeInOutCubic(Math.min(1f, panelAmount * 1.4f)));
 		if (carouselAlpha > 0.02f)
-			carousel(graphics, menuX, menuY, carouselAlpha);
-		if (panelAmount > 0.01f && shownPanel != null)
-			panel(graphics, menuX, menuY, fade * panelAmount);
+			carousel(graphics, panel == null && panelAmount < 0.05f ? menuX : -1000, menuY, carouselAlpha);
+		if (panelAmount > 0.001f && shownPanel != null)
+			panel(graphics, menuX, menuY, fade);
+		if (hoverKey != null && !hoverKey.equals(lastHoverKey))
+			Sounds.HOVER.play(1f + (hoverKey.hashCode() % 5) * 0.02f);
+		lastHoverKey = hoverKey;
+		updateTryOn();
+	}
+
+	private void updateTryOn() {
+		var tile = panel != null && !editing ? hoveredTile : null;
+		Cosmetics.tryCape = null;
+		Cosmetics.tryHat = null;
+		if (tile != null && tile.cosmetic() && !tile.chosen().getAsBoolean())
+			tile.tryOn().run();
 	}
 
 	private void carousel(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float alpha) {
 		var order = new ArrayList<Integer>();
 		for (int i = 0; i < pages.size(); i++)
-			if (Math.abs(relative(i)) < VISIBLE_RANGE)
+			if (Math.abs(relative(i)) < VISIBLE_RANGE && !(i == selected && panelAmount > 0.001f))
 				order.add(i);
 		order.sort(Comparator.comparing((Integer i) -> Math.abs(relative(i))).reversed());
 		for (int index : order) {
@@ -1338,23 +1673,26 @@ public class ZyroxScreen extends Screen {
 		float tilt = side * MAX_TILT;
 		float cos = (float) Math.cos(tilt);
 		float taper = (float) Math.sin(Math.abs(tilt)) * PERSPECTIVE * Math.signum(side);
-		float cardW = cardWidth() * scale * cos;
-		float cardH = cardHeight() * scale;
-		float centerX = carouselX() + side * cardWidth() * 0.86f + Math.signum(rel) * excess * cardWidth() * 0.35f;
-		float centerY = carouselY() + (1f - Fx.easeOutCubic(rise)) * 16f;
+		var rect = cardRect(rel, carouselX());
+		float cardW = rect[2];
+		float cardH = rect[3];
+		float centerX = rect[0] + cardW / 2f;
+		boolean hovered = hover("card-" + page.id(), inside(mouseX, mouseY, (int) rect[0], (int) rect[1], (int) cardW, (int) cardH));
+		float lift = hoverAmount("card-" + page.id(), hovered);
+		float centerY = carouselY() + (1f - Fx.easeOutCubic(rise)) * 16f - lift * 3f;
+		float dim = Math.min(1f, (1f - SIDE_FADE) * amount * (1f - lift * 0.5f));
+		cardFace(graphics, page, centerX, centerY, cardW, cardH, scale, cos, taper, 1f - amount, dim, cardAlpha);
+	}
 
-		boolean hovered = inside(mouseX, mouseY, (int) (centerX - cardW / 2), (int) (centerY - cardH / 2), (int) cardW, (int) cardH);
-		float focus = 1f - amount;
+	private void cardFace(GuiGraphicsExtractor graphics, Page page, float centerX, float centerY, float cardW, float cardH, float scale, float cos, float taper, float focus, float dim, float alpha) {
 		int accent = ZyroxTheme.accent();
-		float dim = Math.min(1f, (1f - SIDE_FADE) * amount * (hovered ? 0.5f : 1f));
-
 		if (focus > 0.05f) {
-			Draw.glow(graphics, centerX - cardW / 2, centerY - cardH / 2, cardW, cardH, CARD_RADIUS, 9f, Fx.alpha(SHADOW, cardAlpha * focus));
-			Draw.glow(graphics, centerX - cardW / 2, centerY - cardH / 2, cardW, cardH, CARD_RADIUS, 4f, Fx.alpha(accent, 0.4f * cardAlpha * focus));
+			Draw.glow(graphics, centerX - cardW / 2, centerY - cardH / 2, cardW, cardH, CARD_RADIUS, 9f, Fx.alpha(SHADOW, alpha * focus));
+			Draw.glow(graphics, centerX - cardW / 2, centerY - cardH / 2, cardW, cardH, CARD_RADIUS, 4f, Fx.alpha(accent, 0.4f * alpha * focus));
 		}
-		int top = Fx.alpha(Fx.mix(Fx.mix(CARD_TOP, 0xFF000000 | accent, 0.14f * focus), BLACK, dim), cardAlpha);
-		int bottom = Fx.alpha(Fx.mix(CARD_BOTTOM, BLACK, dim), cardAlpha);
-		int border = Fx.alpha(Fx.mix(CARD_BORDER, Fx.alpha(accent, 0.85f), focus), cardAlpha);
+		int top = Fx.alpha(Fx.mix(Fx.mix(CARD_TOP, 0xFF000000 | accent, 0.14f * focus), BLACK, dim), alpha);
+		int bottom = Fx.alpha(Fx.mix(CARD_BOTTOM, BLACK, dim), alpha);
+		int border = Fx.alpha(Fx.mix(CARD_BORDER, Fx.alpha(accent, 0.85f), focus), alpha);
 		Draw.card(graphics, centerX, centerY, cardW, cardH, CARD_RADIUS * scale, taper, top, bottom, border);
 
 		var pose = graphics.pose();
@@ -1364,7 +1702,7 @@ public class ZyroxScreen extends Screen {
 		pose.translate(centerX, centerY - cardH * 0.12f);
 		pose.scale(iconScale * cos, iconScale);
 		pose.translate(-ICON_SIZE / 2f, -ICON_SIZE / 2f);
-		int iconColor = Fx.alpha(Fx.mix(Fx.mix(TEXT, accent, focus * 0.25f), BLACK, dim), cardAlpha);
+		int iconColor = Fx.alpha(Fx.mix(Fx.mix(TEXT, accent, focus * 0.25f), BLACK, dim), alpha);
 		graphics.blit(RenderPipelines.GUI_TEXTURED, page.icon(), 0, 0, 0f, 0f, ICON_SIZE, ICON_SIZE, ICON_SIZE, ICON_SIZE, iconColor);
 		pose.popMatrix();
 
@@ -1374,51 +1712,120 @@ public class ZyroxScreen extends Screen {
 		pose.translate(centerX, centerY + labelY);
 		pose.mul(new Matrix3x2f(1f, shear, 0f, 1f, 0f, 0f));
 		pose.scale(scale * cos, scale);
-		Type.LARGE.centered(graphics, font, page.title(), 0, -7, Fx.alpha(Fx.mix(TEXT, BLACK, dim), cardAlpha));
-		Type.REGULAR.centered(graphics, font, page.description(), 0, 9, Fx.alpha(Fx.mix(MUTED, BLACK, dim), cardAlpha));
+		Type.LARGE.centered(graphics, font, page.title(), 0, -7, Fx.alpha(Fx.mix(TEXT, BLACK, dim), alpha));
+		Type.REGULAR.centered(graphics, font, page.description(), 0, 9, Fx.alpha(Fx.mix(MUTED, BLACK, dim), alpha));
 		pose.popMatrix();
 	}
 
 	private void panel(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float alpha) {
 		graphics.nextStratum();
-		var pose = graphics.pose();
-		float slide = (1 - Fx.easeOutCubic(panelAmount)) * 40f;
-		pose.pushMatrix();
-		pose.translate(slide, 0);
+		float t = Fx.easeInOutCubic(panelAmount);
+		var to = panelRect();
+		if (morphFrom == null || panel == null && parent != null)
+			morphFrom = new float[] { to[0] + 40f, to[1], to[2], to[3] };
+		float x = Fx.lerp(morphFrom[0], to[0], t);
+		float y = Fx.lerp(morphFrom[1], to[1], t);
+		float w = Fx.lerp(morphFrom[2], to[2], t);
+		float h = Fx.lerp(morphFrom[3], to[3], t);
+		float radius = Fx.lerp(CARD_RADIUS, PANEL_RADIUS, t);
+		float shell = alpha * Math.min(1f, panelAmount * 4f);
+		Draw.glow(graphics, x, y, w, h, radius, 12f, Fx.alpha(SHADOW, shell));
+		Draw.roundRect(graphics, x, y, w, h, radius, Fx.alpha(Fx.mix(CARD_TOP, PANEL_COLOR, t), shell));
+		Draw.outline(graphics, x, y, w, h, radius, Fx.alpha(Fx.mix(Fx.alpha(ZyroxTheme.accent(), 0.85f), PANEL_BORDER, t), shell));
+		float faceAlpha = 1f - Math.clamp(panelAmount * 2.5f, 0f, 1f);
+		if (faceAlpha > 0.02f) {
+			graphics.nextStratum();
+			cardFace(graphics, shownPanel, x + w / 2f, y + h / 2f, w, h, 1f, 1f, 0f, 1f, 0f, alpha * faceAlpha);
+		}
+		float content = alpha * Math.clamp((panelAmount - 0.55f) / 0.45f, 0f, 1f);
+		if (content < 0.02f)
+			return;
 
 		int left = panelLeft();
 		int right = panelRight();
 		int top = panelTop();
 		int bottom = panelBottom();
-		int w = right - left;
-		int h = bottom - top;
-		Draw.glow(graphics, left, top, w, h, PANEL_RADIUS, 10f, Fx.alpha(SHADOW, alpha));
-		Draw.roundRect(graphics, left, top, w, h, PANEL_RADIUS, Fx.alpha(PANEL_COLOR, alpha));
-		Draw.outline(graphics, left, top, w, h, PANEL_RADIUS, Fx.alpha(PANEL_BORDER, alpha));
+		int width = right - left;
 
-		boolean backHovered = inside(mouseX, mouseY, left + 7, top + 7, 18, 18);
-		Draw.roundRect(graphics, left + 7, top + 7, 18, 18, 9f, Fx.alpha(backHovered ? 0x30FFFFFF : 0x14FFFFFF, alpha));
-		Type.SEMIBOLD.centered(graphics, font, "‹", left + 16, top + 11, Fx.alpha(TEXT, alpha));
-		Type.LARGE.draw(graphics, font, shownPanel.title(), left + 31, top + 12, Fx.alpha(TEXT, alpha));
+		boolean backHovered = hover("back", inside(mouseX, mouseY, left + 9, top + 10, 18, 18));
+		float back = hoverAmount("back", backHovered);
+		Draw.roundRect(graphics, left + 9, top + 10, 18, 18, 9f, Fx.alpha(Fx.mix(0x14FFFFFF, 0x34FFFFFF, back), content));
+		Type.SEMIBOLD.centered(graphics, font, "\u2039", left + 18 - (int) (back * 1.5f), top + 14, Fx.alpha(TEXT, content));
+		Type.LARGE.draw(graphics, font, shownPanel.title(), left + 34, top + 14, Fx.alpha(TEXT, content));
+		searchBox(graphics, mouseX, mouseY, content);
+		graphics.fill(left + 10, rowsTop() - 3, right - 10, rowsTop() - 2, Fx.alpha(0x14FFFFFF, content));
 
-		graphics.enableScissor(left + 1, rowsTop(), right - 1, bottom - 6);
-		int x = left + 6;
-		int rowWidth = w - 14;
-		int y = rowsTop() - (int) panelScroll;
-		for (var row : shownPanel.rows().get()) {
-			row.draw(graphics, x, y, rowWidth, mouseX, mouseY, alpha);
-			y += row.height + ROW_GAP;
+		graphics.enableScissor(left + 1, rowsTop(), right - 1, rowsBottom());
+		int rowX = left + 6;
+		int rowWidth = width - 14;
+		int rowY = rowsTop() - (int) panelScroll;
+		var rows = shownRows();
+		for (int i = 0; i < rows.size(); i++) {
+			var row = rows.get(i);
+			float appear = Math.clamp((contentAnim - i * ROW_STAGGER) * 3f, 0f, 1f);
+			if (appear > 0.01f && rowY + row.height >= rowsTop() && rowY <= rowsBottom()) {
+				var pose = graphics.pose();
+				pose.pushMatrix();
+				pose.translate(0, (1f - Fx.easeOutCubic(appear)) * 10f);
+				row.draw(graphics, rowX, rowY, rowWidth, mouseX, mouseY, content * appear);
+				pose.popMatrix();
+			}
+			rowY += row.height + ROW_GAP;
 		}
 		graphics.disableScissor();
 
 		int overflow = maxPanelScroll();
 		if (overflow > 0) {
-			int track = bottom - 6 - rowsTop();
+			int track = rowsBottom() - rowsTop();
 			int bar = Math.max(14, track * track / (track + overflow));
 			int barTop = rowsTop() + (int) ((track - bar) * panelScroll / overflow);
-			Draw.roundRect(graphics, right - 5, barTop, 2, bar, 1f, Fx.alpha(0x50FFFFFF, alpha));
+			Draw.roundRect(graphics, right - 5, barTop, 2, bar, 1f, Fx.alpha(0x50FFFFFF, content));
 		}
-		pose.popMatrix();
+		infoBar(graphics, left, bottom, width, content);
+	}
+
+	private void searchBox(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float alpha) {
+		int x = searchLeft();
+		int y = searchTop();
+		boolean hovered = hover("search", inside(mouseX, mouseY, x, y, SEARCH_WIDTH, SEARCH_HEIGHT));
+		float focus = hoverAmount("search-focus", searchFocused || searching());
+		float lift = hoverAmount("search", hovered);
+		Draw.roundRect(graphics, x, y, SEARCH_WIDTH, SEARCH_HEIGHT, SEARCH_HEIGHT / 2f, Fx.alpha(Fx.mix(0x12FFFFFF, 0x22FFFFFF, Math.max(lift, focus)), alpha));
+		Draw.outline(graphics, x, y, SEARCH_WIDTH, SEARCH_HEIGHT, SEARCH_HEIGHT / 2f, Fx.alpha(Fx.mix(0x18FFFFFF, ZyroxTheme.accent(), focus), alpha));
+		Draw.outline(graphics, x + 7, y + 5, 6, 6, 3f, Fx.alpha(MUTED, alpha));
+		Fx.line(graphics, x + 12, y + 10, x + 15, y + 13, Fx.alpha(MUTED, alpha));
+		var shown = searching() ? fitted(search, SEARCH_WIDTH - 40) : "Search";
+		Type.REGULAR.draw(graphics, font, shown, x + 19, y + 5, Fx.alpha(searching() ? TEXT : MUTED, alpha));
+		if (searchFocused && (age * 2f) % 2f < 1.2f)
+			graphics.fill(x + 20 + (searching() ? Type.REGULAR.width(font, shown) : 0), y + 4, x + 21 + (searching() ? Type.REGULAR.width(font, shown) : 0), y + 14, Fx.alpha(TEXT, alpha));
+		if (searching())
+			Type.REGULAR.centered(graphics, font, "\u00d7", x + SEARCH_WIDTH - 9, y + 5, Fx.alpha(MUTED, alpha));
+	}
+
+	private String infoText() {
+		var tile = hoveredTile;
+		if (tile != null) {
+			if (!tile.cosmetic())
+				return tile.name() + "  \u00b7  " + (tile.chosen().getAsBoolean() ? "On" : "Off") + "  \u00b7  " + tile.detail();
+			if (tile.locked().getAsBoolean())
+				return tile.name() + "  \u00b7  Locked, you are trying it on";
+			if (tile.chosen().getAsBoolean())
+				return tile.name() + "  \u00b7  Wearing  \u00b7  Right click to " + (Cosmetics.FAVORITES.contains(tile.key()) ? "unfavorite" : "favorite");
+			return tile.name() + "  \u00b7  Click to wear  \u00b7  Right click to " + (Cosmetics.FAVORITES.contains(tile.key()) ? "unfavorite" : "favorite");
+		}
+		if (searching())
+			return "Esc clears the search";
+		return shownPanel.description() + "  \u00b7  Type to search, Esc to go back";
+	}
+
+	private void infoBar(GuiGraphicsExtractor graphics, int left, int bottom, int width, float alpha) {
+		int y = bottom - INFO_HEIGHT - 4;
+		graphics.fill(left + 10, y, left + width - 10, y + 1, Fx.alpha(0x14FFFFFF, alpha));
+		var text = fitted(infoText(), width - 28);
+		boolean active = hoveredTile != null;
+		if (active)
+			Draw.roundRect(graphics, left + 10, y + 8, 4, 4, 2f, Fx.alpha(ZyroxTheme.accent(), alpha));
+		Type.REGULAR.draw(graphics, font, text, left + (active ? 18 : 10), y + 7, Fx.alpha(active ? TEXT : MUTED, alpha));
 	}
 
 	private void editOverlay(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
@@ -1461,20 +1868,24 @@ public class ZyroxScreen extends Screen {
 	}
 
 	private void playClick(float pitch) {
-		minecraft.getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.UI_BUTTON_CLICK, pitch));
+		Sounds.CLICK.play(0.9f + (pitch - 1f) * 0.25f);
 	}
 
 	private void move(int direction) {
 		selected = Math.floorMod(selected + direction, pages.size());
-		playClick(1.6f);
+		Sounds.SLIDE.play(direction > 0 ? 1.05f : 0.95f);
 	}
 
 	private void openSelected() {
+		morphFrom = cardRect(0f, width * CAROUSEL_X);
 		panel = pages.get(selected);
 		panelScroll = 0;
 		panelScrollTarget = 0;
+		search = "";
+		searchFocused = false;
+		contentKey = "";
 		CameraRig.setOrbit(panel.orbit());
-		playClick(1.1f);
+		Sounds.OPEN.play();
 	}
 
 	private void closePanel() {
@@ -1482,9 +1893,12 @@ public class ZyroxScreen extends Screen {
 			onClose();
 			return;
 		}
+		morphFrom = cardRect(0f, width * CAROUSEL_X);
 		panel = null;
+		search = "";
+		searchFocused = false;
 		CameraRig.setOrbit(0f);
-		playClick(0.9f);
+		Sounds.CLOSE.play();
 	}
 
 	private void enterEdit() {
@@ -1530,6 +1944,15 @@ public class ZyroxScreen extends Screen {
 				hud.setScale(1f);
 			return hud != null;
 		}
+		if (!editing && !isClosing && panel != null && event.button() == InputConstants.MOUSE_BUTTON_RIGHT) {
+			var tile = hoveredTile;
+			if (tile == null || !tile.cosmetic())
+				return false;
+			if (!Cosmetics.FAVORITES.remove(tile.key()))
+				Cosmetics.FAVORITES.add(tile.key());
+			Sounds.TOGGLE_ON.play(Cosmetics.FAVORITES.contains(tile.key()) ? 1.2f : 0.8f);
+			return true;
+		}
 		if (event.button() != InputConstants.MOUSE_BUTTON_LEFT || isClosing)
 			return false;
 		double mouseX = event.x();
@@ -1570,19 +1993,30 @@ public class ZyroxScreen extends Screen {
 
 	private boolean clickPanel(double mouseX, double mouseY) {
 		if (!inside(mouseX, mouseY, panelLeft(), panelTop(), panelRight() - panelLeft(), panelBottom() - panelTop())) {
+			searchFocused = false;
 			orbiting = true;
 			return true;
 		}
-		if (inside(mouseX, mouseY, panelLeft() + 7, panelTop() + 7, 18, 18)) {
+		if (panelAmount < 0.6f)
+			return true;
+		if (inside(mouseX, mouseY, panelLeft() + 9, panelTop() + 10, 18, 18)) {
 			closePanel();
 			return true;
 		}
-		if (mouseY < rowsTop() || mouseY >= panelBottom() - 6)
+		if (inside(mouseX, mouseY, searchLeft(), searchTop(), SEARCH_WIDTH, SEARCH_HEIGHT)) {
+			if (searching() && mouseX >= searchLeft() + SEARCH_WIDTH - 16)
+				setSearch("");
+			searchFocused = true;
+			Sounds.TAB.play(1.3f);
+			return true;
+		}
+		searchFocused = false;
+		if (mouseY < rowsTop() || mouseY >= rowsBottom())
 			return true;
 		int x = panelLeft() + 6;
 		int w = panelRight() - panelLeft() - 14;
 		int y = rowsTop() - (int) panelScroll;
-		for (var row : panel.rows().get()) {
+		for (var row : shownRows()) {
 			if (inside(mouseX, mouseY, x, y, w, row.height)) {
 				clickY = mouseY;
 				row.click(mouseX, x, y, w);
@@ -1594,6 +2028,8 @@ public class ZyroxScreen extends Screen {
 	}
 
 	private boolean clickCarousel(double mouseX, double mouseY) {
+		if (panelAmount > 0.05f)
+			return true;
 		int centerX = (int) (width * CAROUSEL_X);
 		int halfWidth = cardWidth() / 2;
 		int halfHeight = cardHeight() / 2;
@@ -1605,6 +2041,27 @@ public class ZyroxScreen extends Screen {
 			openSelected();
 		else
 			move(mouseX < centerX ? -1 : 1);
+		return true;
+	}
+
+	private void setSearch(String value) {
+		search = value;
+		panelScroll = 0;
+		panelScrollTarget = 0;
+	}
+
+	@Override
+	public boolean charTyped(CharacterEvent event) {
+		if (panel == null || editing || isClosing || !event.isAllowedChatCharacter())
+			return false;
+		if (search.length() >= 32)
+			return true;
+		var text = event.codepointAsString();
+		if (search.isEmpty() && text.isBlank())
+			return true;
+		searchFocused = true;
+		setSearch(search + text);
+		Sounds.TYPE.play(0.95f + RANDOM.nextFloat() * 0.1f);
 		return true;
 	}
 
@@ -1705,6 +2162,17 @@ public class ZyroxScreen extends Screen {
 			return true;
 		}
 		int key = event.key();
+		if (panel != null && !editing && searching() && key == InputConstants.KEY_BACKSPACE) {
+			setSearch(event.hasControlDown() ? "" : search.substring(0, search.length() - 1));
+			Sounds.TYPE.play(0.85f);
+			return true;
+		}
+		if (key == InputConstants.KEY_ESCAPE && panel != null && !editing && (searching() || searchFocused)) {
+			setSearch("");
+			searchFocused = false;
+			Sounds.CLOSE.play(1.3f);
+			return true;
+		}
 		if (key == InputConstants.KEY_ESCAPE) {
 			if (editing)
 				leaveEdit();
@@ -1747,6 +2215,9 @@ public class ZyroxScreen extends Screen {
 
 	@Override
 	public void removed() {
+		Cosmetics.tryCape = null;
+		Cosmetics.tryHat = null;
+		Effects.menuAmount = 0f;
 		CameraRig.setActive(false);
 		ZyroxConfig.save();
 	}

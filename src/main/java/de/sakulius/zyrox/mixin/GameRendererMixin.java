@@ -2,6 +2,7 @@ package de.sakulius.zyrox.mixin;
 
 import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.resource.CrossFrameResourcePool;
+import de.sakulius.zyrox.screen.Effects;
 import de.sakulius.zyrox.screen.Glass;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.GameRenderer;
@@ -28,6 +29,7 @@ public class GameRendererMixin {
 
 	@Inject(method = "render", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/gui/render/GuiRenderer;render()V"))
 	private void zyrox$captureGlass(CallbackInfo ci) {
+		Effects.apply(minecraft, mainRenderTarget, resourcePool);
 		Glass.capture(minecraft, mainRenderTarget, resourcePool);
 	}
 }

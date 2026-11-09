@@ -137,6 +137,12 @@ public class ZyroxClientTest implements FabricClientGameTest {
 			check(screen().isPanelOpen(), "clicking the middle card opens its menu");
 			context.waitTicks(ANIMATION_TICKS);
 			context.takeScreenshot("zyrox-hud-panel");
+			input.typeChars("blur");
+			context.waitTicks(ANIMATION_TICKS);
+			context.takeScreenshot("zyrox-hud-search");
+			input.pressKey(InputConstants.KEY_ESCAPE);
+			context.waitTicks(ANIMATION_TICKS);
+			check(screen().isPanelOpen(), "escape clears the search first");
 			clickOn(screen -> screen.tileCenter(0));
 			check(!fps.enabled, "clicking a tile turns the module off");
 			context.waitTicks(10);
@@ -165,7 +171,7 @@ public class ZyroxClientTest implements FabricClientGameTest {
 			clickOn(screen -> screen.hudTabCenter(0));
 			context.waitTicks(10);
 
-			clickOn(screen -> screen.rowCenter("edit"));
+			clickRow("edit");
 			check(screen().isEditing(), "the button opens edit mode");
 			context.waitTicks(ANIMATION_TICKS);
 			check(context.computeOnClient(client -> client.options.getCameraType()) == CameraType.FIRST_PERSON, "edit mode shows the normal view");
@@ -223,18 +229,18 @@ public class ZyroxClientTest implements FabricClientGameTest {
 			check(screen().selectedId().equals("cosmetics"), "the arrow key moves the cards");
 			clickOn(ZyroxScreen::centerCard);
 			context.waitTicks(4);
-			clickOn(screen -> screen.cosmeticTabCenter(0));
+			clickCosmeticTab(0);
 			check(!screen().hasRow("legacy-capes"), "legacy capes are hidden for normal players");
-			clickOn(screen -> screen.tileNamed("Nebula"));
+			clickTile("Nebula");
 			check(Cosmetics.capeId.equals(Cosmetics.DEFAULT_CAPE), "a locked cape cannot be picked, now " + Cosmetics.capeId);
 			context.waitTicks(10);
 			context.takeScreenshot("cosmetics-locked");
 			Roles.accept(com.google.gson.JsonParser.parseString("{\"role\":\"tester\",\"team\":[]}").getAsJsonObject());
 			context.waitTicks(4);
 			check(screen().hasRow("legacy-capes"), "testers see the legacy capes");
-			clickOn(screen -> screen.rowCenter("legacy-capes"));
+			clickRow("legacy-capes");
 			context.waitTicks(10);
-			clickOn(screen -> screen.tileNamed("Aurora"));
+			clickTile("Aurora");
 			check(Cosmetics.capeId.equals("aurora"), "the legacy button shows the old capes, now " + Cosmetics.capeId);
 			check(context.computeOnClient(client -> client.player.getSkin().cape()) == Cosmetics.capeById("aurora").texture(), "an old cape can be worn");
 			context.waitTicks(10);
@@ -244,30 +250,30 @@ public class ZyroxClientTest implements FabricClientGameTest {
 			context.takeScreenshot("cosmetics-legacy-lower");
 			input.scroll(6);
 			context.waitTicks(15);
-			clickOn(screen -> screen.rowCenter("legacy-capes"));
+			clickRow("legacy-capes");
 			context.waitTicks(10);
 			input.scroll(-2);
 			context.waitTicks(15);
-			clickOn(screen -> screen.tileNamed("Nebula"));
+			clickTile("Nebula");
 			check(Cosmetics.capeId.equals("nebula"), "clicking a tile selects the cape, now " + Cosmetics.capeId);
 			check(context.computeOnClient(client -> client.player.getSkin().cape()) == Cosmetics.capeById("nebula").texture(), "the own cape changes right away");
 			context.waitTicks(10);
 			context.takeScreenshot("cosmetics-capes");
 			input.scroll(6);
 			context.waitTicks(15);
-			clickOn(screen -> screen.cosmeticTabCenter(1));
+			clickCosmeticTab(1);
 			input.scroll(-2);
 			context.waitTicks(15);
-			clickOn(screen -> screen.tileNamed("Rainbow Hat"));
+			clickTile("Rainbow Hat");
 			check(Cosmetics.hatId.equals("party_hat"), "clicking a hat wears it, now " + Cosmetics.hatId);
 			context.waitTicks(10);
 			context.takeScreenshot("cosmetics-hats");
 			input.scroll(6);
 			context.waitTicks(15);
-			clickOn(screen -> screen.cosmeticTabCenter(2));
+			clickCosmeticTab(2);
 			input.scroll(-2);
 			context.waitTicks(15);
-			clickOn(screen -> screen.tileNamed("Flame"));
+			clickTile("Flame");
 			check(Cosmetics.aura == 1, "clicking an aura picks it, now " + Cosmetics.aura);
 			context.waitTicks(10);
 			context.takeScreenshot("cosmetics-auras");
@@ -276,7 +282,7 @@ public class ZyroxClientTest implements FabricClientGameTest {
 			context.takeScreenshot("cosmetics-auras-lower");
 			input.scroll(8);
 			context.waitTicks(15);
-			clickOn(screen -> screen.cosmeticTabCenter(0));
+			clickCosmeticTab(0);
 			Cosmetics.aura = 0;
 			Roles.accept(com.google.gson.JsonParser.parseString("{\"role\":\"\",\"team\":[]}").getAsJsonObject());
 			context.waitTicks(ANIMATION_TICKS + 20);
@@ -417,7 +423,7 @@ public class ZyroxClientTest implements FabricClientGameTest {
 
 	private void testPvpModules(ClientGameTestContext context, net.fabricmc.fabric.api.client.gametest.v1.context.TestServerContext server) {
 		var pvp = Modules.ALL.stream().filter(module -> module.category == Module.Category.PVP).toList();
-		check(pvp.size() == 7, "the PvP page has seven modules, got " + pvp.size());
+		check(pvp.size() == 11, "the PvP page has eleven modules, got " + pvp.size());
 		pvp.forEach(module -> module.enabled = true);
 		server.runCommand("time set 1000");
 		server.runCommand("kill @e[type=!player]");
@@ -907,6 +913,24 @@ public class ZyroxClientTest implements FabricClientGameTest {
 
 	private ZyroxScreen screen() {
 		return context.computeOnClient(client -> client.gui.screen() instanceof ZyroxScreen screen ? screen : null);
+	}
+
+	private void clickCosmeticTab(int index) {
+		context.runOnClient(client -> ((ZyroxScreen) client.gui.screen()).revealRow("tabs"));
+		context.waitTicks(2);
+		clickOn(screen -> screen.cosmeticTabCenter(index));
+	}
+
+	private void clickRow(String id) {
+		context.runOnClient(client -> ((ZyroxScreen) client.gui.screen()).revealRow(id));
+		context.waitTicks(2);
+		clickOn(screen -> screen.rowCenter(id));
+	}
+
+	private void clickTile(String name) {
+		context.runOnClient(client -> ((ZyroxScreen) client.gui.screen()).revealTile(name));
+		context.waitTicks(2);
+		clickOn(screen -> screen.tileNamed(name));
 	}
 
 	private void clickOn(Function<ZyroxScreen, int[]> target) {

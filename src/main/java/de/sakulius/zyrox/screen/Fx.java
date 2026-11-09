@@ -67,6 +67,15 @@ public final class Fx {
 		return 1 - inverse * inverse * inverse;
 	}
 
+	public static float easeInOutCubic(float t) {
+		t = Math.clamp(t, 0f, 1f);
+		return t < 0.5f ? 4 * t * t * t : 1 - (float) Math.pow(-2 * t + 2, 3) / 2;
+	}
+
+	public static float lerp(float from, float to, float t) {
+		return from + (to - from) * t;
+	}
+
 	public static float easeOutBack(float t) {
 		float inverse = t - 1;
 		return 1 + 2.2f * inverse * inverse * inverse + 1.2f * inverse * inverse;
