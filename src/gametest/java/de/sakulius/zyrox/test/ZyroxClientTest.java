@@ -224,14 +224,17 @@ public class ZyroxClientTest implements FabricClientGameTest {
 			clickOn(ZyroxScreen::centerCard);
 			context.waitTicks(4);
 			clickOn(screen -> screen.cosmeticTabCenter(0));
-			clickOn(screen -> screen.tileCenter(2));
+			check(!screen().hasRow("legacy-capes"), "legacy capes are hidden for normal players");
+			clickOn(screen -> screen.tileNamed("Nebula"));
 			check(Cosmetics.capeId.equals(Cosmetics.DEFAULT_CAPE), "a locked cape cannot be picked, now " + Cosmetics.capeId);
 			context.waitTicks(10);
 			context.takeScreenshot("cosmetics-locked");
-			Cosmetics.setOwned(List.of("aurora", "nebula", "party_hat", "glacier"));
+			Roles.accept(com.google.gson.JsonParser.parseString("{\"role\":\"tester\",\"team\":[]}").getAsJsonObject());
+			context.waitTicks(4);
+			check(screen().hasRow("legacy-capes"), "testers see the legacy capes");
 			clickOn(screen -> screen.rowCenter("legacy-capes"));
 			context.waitTicks(10);
-			clickOn(screen -> screen.tileCenter(1));
+			clickOn(screen -> screen.tileNamed("Aurora"));
 			check(Cosmetics.capeId.equals("aurora"), "the legacy button shows the old capes, now " + Cosmetics.capeId);
 			check(context.computeOnClient(client -> client.player.getSkin().cape()) == Cosmetics.capeById("aurora").texture(), "an old cape can be worn");
 			context.waitTicks(10);
@@ -243,26 +246,39 @@ public class ZyroxClientTest implements FabricClientGameTest {
 			context.waitTicks(15);
 			clickOn(screen -> screen.rowCenter("legacy-capes"));
 			context.waitTicks(10);
-			clickOn(screen -> screen.tileCenter(2));
+			input.scroll(-2);
+			context.waitTicks(15);
+			clickOn(screen -> screen.tileNamed("Nebula"));
 			check(Cosmetics.capeId.equals("nebula"), "clicking a tile selects the cape, now " + Cosmetics.capeId);
 			check(context.computeOnClient(client -> client.player.getSkin().cape()) == Cosmetics.capeById("nebula").texture(), "the own cape changes right away");
 			context.waitTicks(10);
 			context.takeScreenshot("cosmetics-capes");
+			input.scroll(6);
+			context.waitTicks(15);
 			clickOn(screen -> screen.cosmeticTabCenter(1));
-			clickOn(screen -> screen.tileCenter(1));
+			input.scroll(-2);
+			context.waitTicks(15);
+			clickOn(screen -> screen.tileNamed("Rainbow Hat"));
 			check(Cosmetics.hatId.equals("party_hat"), "clicking a hat wears it, now " + Cosmetics.hatId);
 			context.waitTicks(10);
 			context.takeScreenshot("cosmetics-hats");
+			input.scroll(6);
+			context.waitTicks(15);
 			clickOn(screen -> screen.cosmeticTabCenter(2));
-			clickOn(screen -> screen.tileCenter(1));
+			input.scroll(-2);
+			context.waitTicks(15);
+			clickOn(screen -> screen.tileNamed("Flame"));
 			check(Cosmetics.aura == 1, "clicking an aura picks it, now " + Cosmetics.aura);
 			context.waitTicks(10);
 			context.takeScreenshot("cosmetics-auras");
 			input.scroll(-3);
 			context.waitTicks(10);
 			context.takeScreenshot("cosmetics-auras-lower");
+			input.scroll(8);
+			context.waitTicks(15);
 			clickOn(screen -> screen.cosmeticTabCenter(0));
 			Cosmetics.aura = 0;
+			Roles.accept(com.google.gson.JsonParser.parseString("{\"role\":\"\",\"team\":[]}").getAsJsonObject());
 			context.waitTicks(ANIMATION_TICKS + 20);
 			context.takeScreenshot("zyrox-cosmetics");
 			input.pressKey(InputConstants.KEY_ESCAPE);
@@ -744,7 +760,7 @@ public class ZyroxClientTest implements FabricClientGameTest {
 	}
 
 	private void testWearables(ClientGameTestContext context) {
-		var worn = List.of("party_hat", "red_party_hat", "third_party_hat");
+		var worn = List.of("party_hat", "red_party_hat", "third_party_hat", "beanie", "traffic_cone");
 		for (var id : worn) {
 			Cosmetics.hatId = id;
 			context.runOnClient(client -> client.options.setCameraType(CameraType.THIRD_PERSON_FRONT));

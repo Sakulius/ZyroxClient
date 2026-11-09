@@ -18,7 +18,8 @@ const MAX_TEAM = 200;
 const GIVEN_ROLES = ["staff", "tester"];
 const CACHE_SECONDS = 4;
 const MAX_OWNED = 200;
-const FREE = new Set(["default", "none", "zyrox", "legacy_zyrox", "red_party_hat", "aura_off", "aura_flame"]);
+const FREE = new Set(["default", "none", "zyrox", "red_party_hat", "aura_off", "aura_flame"]);
+const LEGACY = new Set(["legacy_zyrox", "aurora", "ember", "void", "ocean", "sakura", "forest", "royal", "frost", "carbon"]);
 const MAX_CACHED = 5000;
 
 const caches = new WeakMap();
@@ -181,7 +182,7 @@ async function readLoadouts(url, env, now) {
 		const has = new Set(owned.results.map(row => `${row.uuid}/${row.item}`));
 		for (const row of items.results) {
 			const entry = cache.get(row.uuid);
-			if (entry.role || FREE.has(row.item) || has.has(`${row.uuid}/${row.item}`))
+			if (entry.role || !LEGACY.has(row.item) && (FREE.has(row.item) || has.has(`${row.uuid}/${row.item}`)))
 				(entry.items ??= {})[row.slot] = row.item;
 		}
 	}

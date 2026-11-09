@@ -96,7 +96,7 @@ public final class Roles {
 		Friends.refreshSoon();
 	}
 
-	static void accept(JsonObject body) {
+	public static void accept(JsonObject body) {
 		if (!body.has("role"))
 			return;
 		own = Role.of(Friends.text(body, "role"));

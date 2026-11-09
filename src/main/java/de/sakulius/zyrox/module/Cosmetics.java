@@ -77,9 +77,11 @@ public final class Cosmetics {
 		new Wearable(NOTHING, "Off"),
 		new Wearable("party_hat", "Rainbow Hat"),
 		new Wearable("red_party_hat", "Party Hat"),
-		new Wearable("third_party_hat", "Striped Hat"));
+		new Wearable("third_party_hat", "Striped Hat"),
+		new Wearable("beanie", "Beanie"),
+		new Wearable("traffic_cone", "Traffic Cone"));
 
-	private static final Set<String> FREE = Set.of(DEFAULT_CAPE, NOTHING, "zyrox", "legacy_zyrox", "red_party_hat", "aura_off", "aura_flame");
+	private static final Set<String> FREE = Set.of(DEFAULT_CAPE, NOTHING, "zyrox", "red_party_hat", "aura_off", "aura_flame");
 
 	public static String capeId = DEFAULT_CAPE;
 	public static String hatId = NOTHING;
@@ -109,7 +111,25 @@ public final class Cosmetics {
 	}
 
 	public static boolean owns(String id) {
-		return FREE.contains(id) || owned.contains(id) || Roles.own() != null;
+		if (Roles.own() != null)
+			return true;
+		if (isLegacy(id))
+			return false;
+		return FREE.contains(id) || owned.contains(id);
+	}
+
+	public static boolean isLegacy(String id) {
+		for (var cape : LEGACY_CAPES)
+			if (cape.id().equals(id))
+				return true;
+		return false;
+	}
+
+	public static String hatName(String id) {
+		for (var wearable : HATS)
+			if (wearable.id().equals(id))
+				return wearable.name();
+		return null;
 	}
 
 	public static void setOwned(Collection<String> items) {
