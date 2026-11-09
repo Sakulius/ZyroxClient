@@ -128,7 +128,7 @@ test("a player can save a cape and everyone can read it", async () => {
 test("saving replaces the old loadout", async () => {
 	const s = setup();
 	const token = await s.signIn();
-	await s.call("PUT", "/v1/loadout", { items: { cape: "legacy_zyrox", hat: "red_party_hat" } }, token);
+	await s.call("PUT", "/v1/loadout", { items: { cape: "zyrox", hat: "red_party_hat" } }, token);
 	s.now += 5;
 	await s.call("PUT", "/v1/loadout", { items: { cape: "zyrox" } }, token);
 	const { loadouts } = await (await s.call("GET", `/v1/loadouts?uuids=${PLAYER}`)).json();
@@ -400,4 +400,16 @@ test("the admin key gives cosmetics and roles", async () => {
 	assert.equal((await call("GET", `/v1/admin/player?uuid=${OTHER}`, undefined, wrong)).status, 401);
 	s.env.ADMIN_KEY = "short";
 	assert.equal((await call("GET", `/v1/admin/player?uuid=${OTHER}`, undefined, { authorization: "Admin short" })).status, 401);
+});
+
+test("legacy capes are only for the team", async () => {
+	const s = setup();
+	await makeOwner(s);
+	const owner = await s.signIn(PLAYER);
+	const token = await s.signIn(OTHER);
+	await s.call("POST", "/v1/owned", { uuid: OTHER, item: "aurora", owned: true }, owner);
+	await s.call("PUT", "/v1/loadout", { items: { cape: "aurora" } }, token);
+	assert.deepEqual((await (await s.call("GET", `/v1/loadouts?uuids=${OTHER}`)).json()).loadouts, {});
+	await s.call("POST", "/v1/roles", { uuid: OTHER, role: "tester" }, owner);
+	assert.deepEqual((await (await s.call("GET", `/v1/loadouts?uuids=${OTHER}`)).json()).loadouts, { [OTHER]: { cape: "aurora" } });
 });

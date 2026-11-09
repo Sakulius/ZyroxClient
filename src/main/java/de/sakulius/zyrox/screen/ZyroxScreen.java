@@ -20,6 +20,7 @@ import de.sakulius.zyrox.music.SkyLyrics;
 import de.sakulius.zyrox.music.WindowsMediaSession;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -433,21 +434,35 @@ public class ZyroxScreen extends Screen {
 
 	private List<Row> cosmeticRows() {
 		var rows = new ArrayList<Row>();
-		rows.add(tabs("tabs", COSMETIC_TABS, () -> cosmeticTab, index -> cosmeticTab = index));
-		if (cosmeticTab == 0) {
-			rows.add(button("legacy-capes", legacyCapes ? "Back to capes" : "Legacy capes", () -> {
+		boolean team = Roles.own() != null;
+		boolean legacy = cosmeticTab == 0 && legacyCapes && team;
+		rows.add(tabs("tabs", COSMETIC_TABS, () -> cosmeticTab, index -> {
+			cosmeticTab = index;
+			legacyCapes = false;
+		}));
+		rows.add(wearing());
+		if (cosmeticTab == 0 && team) {
+			rows.add(button("legacy-capes", legacy ? "Back to capes" : "Legacy capes  \u00b7  Team only", () -> {
 				legacyCapes = !legacyCapes;
 				panelScroll = 0;
 				panelScrollTarget = 0;
 			}));
 		}
-		rows.add(tileGrid(switch (cosmeticTab) {
-			case 0 -> capeTiles(legacyCapes ? Cosmetics.LEGACY_CAPES : Cosmetics.CAPES);
+		var tiles = switch (cosmeticTab) {
+			case 0 -> capeTiles(legacy ? Cosmetics.LEGACY_CAPES : Cosmetics.CAPES);
 			case 1 -> hatTiles();
 			default -> auraTiles();
-		}));
+		};
+		var unlocked = sortedTiles(tiles, false);
+		var locked = sortedTiles(tiles, true);
+		rows.add(countHeading("unlocked", legacy ? "Legacy capes" : "Unlocked", unlocked.size() + " / " + tiles.size()));
+		rows.add(tileGrid("grid", unlocked));
+		if (!locked.isEmpty()) {
+			rows.add(countHeading("locked", "Locked", String.valueOf(locked.size())));
+			rows.add(tileGrid("grid-locked", locked));
+		}
 		rows.add(syncStatus());
-		if (Roles.own() == null)
+		if (!team && !locked.isEmpty())
 			rows.add(note("Locked cosmetics are given out by the Zyrox team."));
 		if (cosmeticTab == 1)
 			rows.add(note("Hats step aside while you wear a helmet."));
@@ -455,6 +470,50 @@ public class ZyroxScreen extends Screen {
 			rows.add(note("Auras only show for you."));
 		rows.add(note("Drag next to the player to look around."));
 		return rows;
+	}
+
+	private List<Tile> sortedTiles(List<Tile> tiles, boolean locked) {
+		var first = tiles.getFirst();
+		return tiles.stream().filter(tile -> tile.locked().getAsBoolean() == locked)
+			.sorted(Comparator.comparing((Tile tile) -> tile != first).thenComparing(Tile::name)).toList();
+	}
+
+	private Row countHeading(String id, String text, String count) {
+		return new Row(id, 18) {
+			@Override
+			void draw(GuiGraphics graphics, int x, int y, int w, int mouseX, int mouseY, float alpha) {
+				Type.SEMIBOLD.draw(graphics, font, text, x + 8, y + 7, Fx.alpha(TEXT, alpha));
+				Type.REGULAR.draw(graphics, font, count, x + w - 8 - Type.REGULAR.width(font, count), y + 7, Fx.alpha(MUTED, alpha));
+			}
+
+			@Override
+			void click(double mouseX, int x, int y, int w) {
+			}
+		};
+	}
+
+	private Row wearing() {
+		return new Row("wearing", 32) {
+			@Override
+			void draw(GuiGraphics graphics, int x, int y, int w, int mouseX, int mouseY, float alpha) {
+				Draw.roundRect(graphics, x, y, w, height, ROW_RADIUS, Fx.alpha(0x14FFFFFF, alpha));
+				var worn = new ArrayList<String>();
+				var cape = Cosmetics.capeById(Cosmetics.capeId);
+				if (cape != null && cape.texture() != null)
+					worn.add(cape.name() + " Cape");
+				var hat = Cosmetics.hatName(Cosmetics.hatId);
+				if (hat != null && !Cosmetics.hatId.equals(Cosmetics.NOTHING))
+					worn.add(hat);
+				if (Cosmetics.aura > 0)
+					worn.add(Cosmetics.AURAS.get(Cosmetics.aura).name() + " Aura");
+				Type.REGULAR.draw(graphics, font, "Wearing", x + 8, y + 5, Fx.alpha(MUTED, alpha));
+				Type.SEMIBOLD.draw(graphics, font, fitted(worn.isEmpty() ? "Nothing yet" : String.join("  \u00b7  ", worn), w - 16), x + 8, y + 17, Fx.alpha(TEXT, alpha));
+			}
+
+			@Override
+			void click(double mouseX, int x, int y, int w) {
+			}
+		};
 	}
 
 	private Row tabs(String id, List<String> labels, IntSupplier get, IntConsumer set) {
@@ -577,10 +636,23 @@ public class ZyroxScreen extends Screen {
 		return shorter + "...";
 	}
 
+	private abstract static class TileRow extends Row {
+		final List<Tile> tiles;
+
+		TileRow(String id, int height, List<Tile> tiles) {
+			super(id, height);
+			this.tiles = tiles;
+		}
+	}
+
 	private Row tileGrid(List<Tile> tiles) {
+		return tileGrid("grid", tiles);
+	}
+
+	private Row tileGrid(String id, List<Tile> tiles) {
 		int w = panelRight() - panelLeft() - 14;
 		int rows = (tiles.size() + tileColumns(w) - 1) / tileColumns(w);
-		return new Row("grid", TILE_TOP + rows * (TILE_HEIGHT + TILE_GAP)) {
+		return new TileRow(id, TILE_TOP + rows * (TILE_HEIGHT + TILE_GAP), tiles) {
 			@Override
 			void draw(GuiGraphics graphics, int x, int y, int w, int mouseX, int mouseY, float alpha) {
 				int tileWidth = tileWidth(w);
@@ -1110,6 +1182,25 @@ public class ZyroxScreen extends Screen {
 		int rowHeight = panel.rows().get().stream().filter(entry -> entry.id.equals("grid")).findFirst().orElseThrow().height;
 		int rowY = rowCenter("grid")[1] - rowHeight / 2;
 		return new int[] { tileX(x, w, index) + tileWidth(w) / 2, tileY(rowY, w, index) + TILE_HEIGHT / 2 };
+	}
+
+	public int[] tileNamed(String name) {
+		int x = panelLeft() + 6;
+		int w = panelRight() - panelLeft() - 14;
+		int y = rowsTop() - (int) panelScroll;
+		for (var row : panel.rows().get()) {
+			if (row instanceof TileRow grid) {
+				for (int i = 0; i < grid.tiles.size(); i++)
+					if (grid.tiles.get(i).name().equals(name))
+						return new int[] { tileX(x, w, i) + tileWidth(w) / 2, tileY(y, w, i) + TILE_HEIGHT / 2 };
+			}
+			y += row.height + ROW_GAP;
+		}
+		throw new IllegalArgumentException(name);
+	}
+
+	public boolean hasRow(String id) {
+		return panel.rows().get().stream().anyMatch(row -> row.id.equals(id));
 	}
 
 	public int[] rowCenterAt(String id, float across) {
